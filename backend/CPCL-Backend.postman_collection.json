@@ -1,0 +1,59 @@
+{
+  "info": { "name": "CPCL Backend API", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "officerToken", "value": "" },
+    { "key": "bidderToken", "value": "" },
+    { "key": "userId", "value": "" },
+    { "key": "tenderId", "value": "" },
+    { "key": "applicationId", "value": "" },
+    { "key": "companyId", "value": "" },
+    { "key": "otpPhone", "value": "+919876543210" },
+    { "key": "otpEmail", "value": "new.bidder@example.com" }
+  ],
+  "item": [
+    { "name": "Health", "request": { "method": "GET", "url": "{{baseUrl}}/api/health" } },
+    { "name": "Auth", "item": [
+      { "name": "Register Officer", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"name\": \"Rahul Sharma\",\n  \"employeeId\": \"CPCL-EMP-2001\",\n  \"email\": \"rahul@example.com\",\n  \"phone\": \"+919876543210\",\n  \"department\": \"Procurement\",\n  \"designation\": \"Procurement Officer\",\n  \"password\": \"StrongPassword123!\"\n}"}, "url":"{{baseUrl}}/api/auth/register/officer" } },
+      { "name": "Register Bidder", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{\n  \"name\": \"Amit Kumar\",\n  \"email\": \"amit@example.com\",\n  \"phone\": \"+919876543210\",\n  \"password\": \"StrongPassword123!\",\n  \"company\": { \"companyName\": \"ABC Engineering Pvt Ltd\", \"cin\": \"U12345DL2020PTC123456\", \"pan\": \"ABCDE1234F\", \"gstin\": \"07ABCDE1234F1Z5\", \"msmeNumber\": \"UDYAM-DL-00-1234567\" }\n}"}, "url":"{{baseUrl}}/api/auth/register/bidder" } },
+      { "name": "Login", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{ \"email\": \"rahul.sharma@cpcl.co.in\", \"password\": \"DemoPassword123!\" }"}, "url":"{{baseUrl}}/api/auth/login" } },
+      { "name": "Send Phone OTP", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{ \"phone\": \"{{otpPhone}}\" }"}, "url":"{{baseUrl}}/api/auth/otp/phone/send" } },
+      { "name": "Verify Phone OTP (development code 123456)", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{ \"phone\": \"{{otpPhone}}\", \"code\": \"123456\" }"}, "url":"{{baseUrl}}/api/auth/otp/phone/verify" } },
+      { "name": "Send Email OTP", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{ \"email\": \"{{otpEmail}}\" }"}, "url":"{{baseUrl}}/api/auth/otp/email/send" } },
+      { "name": "Verify Email OTP", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{ \"email\": \"{{otpEmail}}\", \"code\": \"ENTER_CODE_FROM_EMAIL\" }"}, "url":"{{baseUrl}}/api/auth/otp/email/verify" } },
+      { "name": "Refresh Token", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{ \"refreshToken\": \"{{refreshToken}}\" }"}, "url":"{{baseUrl}}/api/auth/refresh" } },
+      { "name": "Logout", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{ \"refreshToken\": \"{{refreshToken}}\" }"}, "url":"{{baseUrl}}/api/auth/logout" } },
+      { "name": "Forgot Password", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{ \"email\": \"user@example.com\" }"}, "url":"{{baseUrl}}/api/auth/forgot-password" } },
+      { "name": "Reset Password", "request": { "method": "POST", "header": [{"key":"Content-Type","value":"application/json"}], "body": {"mode":"raw","raw":"{ \"token\": \"provider-token\", \"password\": \"NewPassword123!\" }"}, "url":"{{baseUrl}}/api/auth/reset-password" } }
+    ] },
+    { "name": "Officer", "item": [
+      { "name": "Create Tender", "request": { "method":"POST", "header":[{"key":"Authorization","value":"Bearer {{officerToken}}"},{"key":"Content-Type","value":"application/json"}], "body":{"mode":"raw","raw":"{ \"tenderNumber\": \"CPCL/2026/099\", \"title\": \"Supply of refinery valves\", \"description\": \"Supply and installation of approved valves.\", \"category\": \"Equipment & Machinery\", \"startDate\": \"2026-09-22\", \"closingDate\": \"2026-10-30\", \"requirements\": [{\"name\":\"PAN\",\"category\":\"STATUTORY\",\"required\":true}] }"},"url":"{{baseUrl}}/api/officer/tenders" } },
+      { "name": "List Tenders", "request": { "method":"GET", "header":[{"key":"Authorization","value":"Bearer {{officerToken}}"}],"url":"{{baseUrl}}/api/officer/tenders" } },
+      { "name": "Get Tender", "request": { "method":"GET", "header":[{"key":"Authorization","value":"Bearer {{officerToken}}"}],"url":"{{baseUrl}}/api/officer/tenders/{{tenderId}}" } },
+      { "name": "Update Tender", "request": { "method":"PATCH", "header":[{"key":"Authorization","value":"Bearer {{officerToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{ \"title\": \"Updated tender title\" }"},"url":"{{baseUrl}}/api/officer/tenders/{{tenderId}}" } },
+      { "name": "Publish Tender", "request": { "method":"POST","header":[{"key":"Authorization","value":"Bearer {{officerToken}}"}],"url":"{{baseUrl}}/api/officer/tenders/{{tenderId}}/publish" } },
+      { "name": "Close Tender", "request": { "method":"POST","header":[{"key":"Authorization","value":"Bearer {{officerToken}}"}],"url":"{{baseUrl}}/api/officer/tenders/{{tenderId}}/close" } },
+      { "name": "View Applications", "request": { "method":"GET","header":[{"key":"Authorization","value":"Bearer {{officerToken}}"}],"url":"{{baseUrl}}/api/officer/tenders/{{tenderId}}/applications" } },
+      { "name": "View Application", "request": { "method":"GET","header":[{"key":"Authorization","value":"Bearer {{officerToken}}"}],"url":"{{baseUrl}}/api/officer/applications/{{applicationId}}" } },
+      { "name": "Accept Application", "request": { "method":"POST","header":[{"key":"Authorization","value":"Bearer {{officerToken}}"}],"url":"{{baseUrl}}/api/officer/applications/{{applicationId}}/accept" } },
+      { "name": "Reject Application", "request": { "method":"POST","header":[{"key":"Authorization","value":"Bearer {{officerToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{ \"reason\": \"Minimum experience requirement not satisfied.\" }"},"url":"{{baseUrl}}/api/officer/applications/{{applicationId}}/reject" } },
+      { "name": "Blacklist Company", "request": { "method":"POST","header":[{"key":"Authorization","value":"Bearer {{officerToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{ \"reason\": \"Compliance policy violation.\" }"},"url":"{{baseUrl}}/api/officer/companies/{{companyId}}/blacklist" } }
+    ] },
+    { "name": "Bidder", "item": [
+      { "name":"List Active Tenders","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{bidderToken}}"}],"url":"{{baseUrl}}/api/bidder/tenders"}},
+      { "name":"Get Tender","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{bidderToken}}"}],"url":"{{baseUrl}}/api/bidder/tenders/{{tenderId}}"}},
+      { "name":"Upload Document","request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{bidderToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{ \"documentType\": \"OEM Certificate\", \"fileName\": \"oem.pdf\", \"fileUrl\": \"/mock/uploads/oem.pdf\" }"},"url":"{{baseUrl}}/api/bidder/documents"}},
+      { "name":"List Documents","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{bidderToken}}"}],"url":"{{baseUrl}}/api/bidder/documents"}},
+      { "name":"Apply","request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{bidderToken}}"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{ \"documents\": [] }"},"url":"{{baseUrl}}/api/bidder/tenders/{{tenderId}}/apply"}},
+      { "name":"List Applications","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{bidderToken}}"}],"url":"{{baseUrl}}/api/bidder/applications"}},
+      { "name":"Get Application","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{bidderToken}}"}],"url":"{{baseUrl}}/api/bidder/applications/{{applicationId}}"}}
+    ] },
+    { "name": "Notifications", "item": [
+      { "name":"List Notifications","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{accessToken}}"}],"url":"{{baseUrl}}/api/notifications"}},
+      { "name":"Mark Read","request":{"method":"PATCH","header":[{"key":"Authorization","value":"Bearer {{accessToken}}"}],"url":"{{baseUrl}}/api/notifications/{{userId}}/read"}},
+      { "name":"Mark All Read","request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{accessToken}}"}],"url":"{{baseUrl}}/api/notifications/read-all"}}
+    ] }
+  ]
+}

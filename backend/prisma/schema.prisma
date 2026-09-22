@@ -1,0 +1,266 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     String                   @id @default(cuid())
+  name                   String
+  email                  String                   @unique(map: "User_email_key")
+  phone                  String                   @unique(map: "User_phone_key")
+  passwordHash           String
+  role                   UserRole
+  emailVerified          Boolean                  @default(false)
+  phoneVerified          Boolean                  @default(false)
+  isActive               Boolean                  @default(true)
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  company                Company?
+  emailVerificationCodes EmailVerificationCode[]
+  notifications          Notification[]
+  officerProfile         OfficerProfile?
+  refreshTokens          RefreshToken[]
+
+  @@map("User")
+}
+
+model OfficerProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique(map: "OfficerProfile_userId_key")
+  employeeId  String   @unique(map: "OfficerProfile_employeeId_key")
+  department  String
+  designation String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "OfficerProfile_userId_fkey")
+  tenders     Tender[]
+
+  @@map("OfficerProfile")
+}
+
+model Company {
+  id              String        @id @default(cuid())
+  userId          String        @unique(map: "Company_userId_key")
+  companyName     String
+  cin             String?
+  pan             String?
+  gstin           String?
+  msmeNumber      String?
+  address         String?
+  city            String?
+  state           String?
+  pincode         String?
+  contactEmail    String?
+  contactPhone    String?
+  status          CompanyStatus @default(ACTIVE)
+  blacklistReason String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  applications    Application[]
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Company_userId_fkey")
+  documents       Document[]
+
+  @@map("Company")
+}
+
+model Tender {
+  id           String             @id @default(cuid())
+  tenderNumber String             @unique(map: "Tender_tenderNumber_key")
+  title        String
+  description  String
+  category     String
+  startDate    DateTime
+  closingDate  DateTime
+  status       TenderStatus       @default(DRAFT)
+  officerId    String
+  documentUrl  String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  applications Application[]
+  officer      OfficerProfile     @relation(fields: [officerId], references: [id], map: "Tender_officerId_fkey")
+  requirements TenderRequirement[]
+
+  @@index([officerId], map: "Tender_officerId_fkey")
+  @@map("Tender")
+}
+
+model TenderRequirement {
+  id                   String                @id @default(cuid())
+  tenderId             String
+  name                 String
+  category             RequirementCategory
+  required             Boolean               @default(true)
+  description          String?
+  createdAt            DateTime              @default(now())
+  applicationDocuments ApplicationDocument[]
+  complianceResults    ComplianceResult[]
+  tender               Tender                @relation(fields: [tenderId], references: [id], onDelete: Cascade, map: "TenderRequirement_tenderId_fkey")
+
+  @@index([tenderId], map: "TenderRequirement_tenderId_idx")
+  @@map("TenderRequirement")
+}
+
+model Document {
+  id                   String                @id @default(cuid())
+  companyId            String
+  documentType         String
+  fileName             String
+  fileUrl              String
+  status               DocumentStatus        @default(PENDING)
+  uploadedAt           DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  applicationDocuments ApplicationDocument[]
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: Cascade, map: "Document_companyId_fkey")
+
+  @@index([companyId], map: "Document_companyId_idx")
+  @@map("Document")
+}
+
+model Application {
+  id                String                @id @default(cuid())
+  tenderId          String
+  companyId         String
+  complianceScore   Int                   @default(0)
+  status            ApplicationStatus     @default(UNDER_REVIEW)
+  rejectionReason   String?
+  submittedAt       DateTime              @default(now())
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  company           Company               @relation(fields: [companyId], references: [id], onDelete: Cascade, map: "Application_companyId_fkey")
+  tender            Tender                @relation(fields: [tenderId], references: [id], onDelete: Cascade, map: "Application_tenderId_fkey")
+  documents         ApplicationDocument[]
+  complianceResults ComplianceResult[]
+
+  @@unique([tenderId, companyId], map: "Application_tenderId_companyId_key")
+  @@index([companyId], map: "Application_companyId_idx")
+  @@map("Application")
+}
+
+model ApplicationDocument {
+  id            String             @id @default(cuid())
+  applicationId String
+  documentId    String
+  requirementId String?
+  application   Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade, map: "ApplicationDocument_applicationId_fkey")
+  document      Document           @relation(fields: [documentId], references: [id], onDelete: Cascade, map: "ApplicationDocument_documentId_fkey")
+  requirement   TenderRequirement? @relation(fields: [requirementId], references: [id], map: "ApplicationDocument_requirementId_fkey")
+
+  @@unique([applicationId, documentId, requirementId], map: "ApplicationDocument_applicationId_documentId_requirementId_key")
+  @@index([documentId], map: "ApplicationDocument_documentId_fkey")
+  @@index([requirementId], map: "ApplicationDocument_requirementId_fkey")
+  @@map("ApplicationDocument")
+}
+
+model ComplianceResult {
+  id            String              @id @default(cuid())
+  applicationId String
+  requirementId String
+  result        ComplianceResultType
+  remarks       String?
+  createdAt     DateTime            @default(now())
+  application   Application         @relation(fields: [applicationId], references: [id], onDelete: Cascade, map: "ComplianceResult_applicationId_fkey")
+  requirement   TenderRequirement   @relation(fields: [requirementId], references: [id], onDelete: Cascade, map: "ComplianceResult_requirementId_fkey")
+
+  @@unique([applicationId, requirementId], map: "ComplianceResult_applicationId_requirementId_key")
+  @@index([requirementId], map: "ComplianceResult_requirementId_fkey")
+  @@map("ComplianceResult")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Notification_userId_fkey")
+
+  @@index([userId, read], map: "Notification_userId_read_idx")
+  @@map("Notification")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique(map: "RefreshToken_tokenHash_key")
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "RefreshToken_userId_fkey")
+
+  @@index([userId, revoked], map: "RefreshToken_userId_revoked_idx")
+  @@map("RefreshToken")
+}
+
+model EmailVerificationCode {
+  id        String   @id @default(cuid())
+  userId    String
+  email     String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  usedAt    DateTime?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "EmailVerificationCode_userId_fkey")
+
+  @@index([email, verified, expiresAt], map: "EmailVerificationCode_email_verified_expiresAt_idx")
+  @@index([userId, createdAt], map: "EmailVerificationCode_userId_createdAt_idx")
+  @@map("EmailVerificationCode")
+}
+
+enum ComplianceResultType {
+  PASS
+  FAIL
+  REVIEW
+}
+
+enum RequirementCategory {
+  STATUTORY
+  FINANCIAL
+  EXPERIENCE
+  TECHNICAL
+}
+
+enum ApplicationStatus {
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+}
+
+enum NotificationType {
+  APPLICATION_SUBMITTED
+  APPLICATION_ACCEPTED
+  APPLICATION_REJECTED
+  BLACKLISTED
+  NEW_BID
+  DOCUMENT_REVIEW
+}
+
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+  REVIEW
+  FAILED
+}
+
+enum UserRole {
+  OFFICER
+  BIDDER
+}
+
+enum TenderStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
+enum CompanyStatus {
+  ACTIVE
+  BLACKLISTED
+}

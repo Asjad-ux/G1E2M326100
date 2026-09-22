@@ -1,0 +1,21 @@
+import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
+import * as c from '../controllers/auth.controller.js';
+import { validate } from '../middleware/validation.js';
+import { asyncHandler } from '../utils/async-handler.js';
+import * as v from '../validators/auth.js';
+
+const router=Router();
+const otpLimit=rateLimit({windowMs:10*60*1000,max:5,message:{success:false,message:'Please wait before requesting another code.'}});
+router.post('/register/officer',validate(v.officerRegisterSchema),asyncHandler(c.registerOfficer));
+router.post('/register/bidder',validate(v.bidderRegisterSchema),asyncHandler(c.registerBidder));
+router.post('/login',validate(v.loginSchema),asyncHandler(c.login));
+router.post('/refresh',validate(v.refreshSchema),asyncHandler(c.refresh));
+router.post('/logout',validate(v.refreshSchema),asyncHandler(c.logout));
+router.post('/forgot-password',validate(v.forgotSchema),asyncHandler(c.forgot));
+router.post('/reset-password',validate(v.resetSchema),asyncHandler(c.reset));
+router.post('/otp/phone/send',otpLimit,validate(v.phoneSendSchema),asyncHandler(c.sendPhone));
+router.post('/otp/phone/verify',validate(v.phoneVerifySchema),asyncHandler(c.verifyPhone));
+router.post('/otp/email/send',otpLimit,validate(v.emailSendSchema),asyncHandler(c.sendEmail));
+router.post('/otp/email/verify',validate(v.emailVerifySchema),asyncHandler(c.verifyEmail));
+export default router;

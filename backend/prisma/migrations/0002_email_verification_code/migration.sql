@@ -1,0 +1,4 @@
+CREATE TABLE `EmailVerificationCode` (`id` VARCHAR(191) NOT NULL,`userId` VARCHAR(191) NOT NULL,`email` VARCHAR(191) NOT NULL,`codeHash` VARCHAR(191) NOT NULL,`expiresAt` DATETIME(3) NOT NULL,`attempts` INTEGER NOT NULL DEFAULT 0,`verified` BOOLEAN NOT NULL DEFAULT false,`createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),`usedAt` DATETIME(3) NULL, PRIMARY KEY (`id`)) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE INDEX `EmailVerificationCode_email_verified_expiresAt_idx` ON `EmailVerificationCode`(`email`, `verified`, `expiresAt`);
+CREATE INDEX `EmailVerificationCode_userId_createdAt_idx` ON `EmailVerificationCode`(`userId`, `createdAt`);
+ALTER TABLE `EmailVerificationCode` ADD CONSTRAINT `EmailVerificationCode_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;

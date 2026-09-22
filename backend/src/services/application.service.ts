@@ -1,0 +1,25 @@
+import { ApplicationStatus, CompanyStatus, NotificationType, TenderStatus } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
+import { badRequest, conflict, forbidden, notFound } from '../utils/errors.js';
+import { calculateCompliance } from './compliance.service.js';
+
+async function bidderCompany(userId: string) { const company = await prisma.company.findUnique({ where: { userId } }); if (!company) return notFound('Bidder company profile not found'); return company; }
+
+export async function submitApplication(userId: string, tenderId: string, documents: { documentId: string; requirementId?: string }[] = []) {
+  const company = await bidderCompany(userId); if (company.status === CompanyStatus.BLACKLISTED) return forbidden('Your bidder company is blacklisted and cannot submit applications');
+  const tender = await prisma.tender.findUnique({ where: { id: tenderId } }); if (!tender) return notFound('Tender not found');
+  if (tender.status !== TenderStatus.ACTIVE) return badRequest('Only active tenders accept applications'); if (tender.closingDate < new Date()) return badRequest('Tender closing date has passed');
+  const existing = await prisma.application.findUnique({ where: { tenderId_companyId: { tenderId, companyId: company.id } } }); if (existing) return conflict('Your company has already applied to this tender');
+  const application = await prisma.application.create({ data: { tenderId, companyId: company.id, documents: { create: documents.map(d => ({ documentId: d.documentId, requirementId: d.requirementId })) } }, include: { tender: true, company: true } });
+  await calculateCompliance(application.id);
+  const officers = await prisma.user.findMany({ where: { role: 'OFFICER' } });
+  if (officers.length) await prisma.notification.createMany({ data: officers.map(o => ({ userId: o.id, title: 'New bid received', message: `${company.companyName} submitted a bid for ${tender.tenderNumber}`, type: NotificationType.NEW_BID })) });
+  return prisma.application.findUnique({ where: { id: application.id }, include: { documents: { include: { document: true } }, complianceResults: true, tender: true, company: true } });
+}
+
+export async function listBidderApplications(userId: string) { const company = await bidderCompany(userId); return prisma.application.findMany({ where: { companyId: company.id }, include: { tender: true, complianceResults: true, documents: { include: { document: true } } }, orderBy: { createdAt: 'desc' } }); }
+export async function getBidderApplication(userId: string, id: string) { const company = await bidderCompany(userId); const app = await prisma.application.findFirst({ where: { id, companyId: company.id }, include: { tender: { include: { requirements: true } }, company: true, documents: { include: { document: true } }, complianceResults: { include: { requirement: true } } } }); if (!app) return notFound('Application not found'); return app; }
+export async function listTenderApplications(tenderId: string) { return prisma.application.findMany({ where: { tenderId }, include: { company: { include: { user: { select: { name: true, email: true, phone: true } } } }, complianceResults: true }, orderBy: { submittedAt: 'asc' } }); }
+export async function getOfficerApplication(id: string) { const app = await prisma.application.findUnique({ where: { id }, include: { tender: { include: { requirements: true } }, company: { include: { user: { select: { name: true, email: true, phone: true } }, documents: true } }, documents: { include: { document: true, requirement: true } }, complianceResults: { include: { requirement: true } } } }); if (!app) return notFound('Application not found'); return app; }
+export async function updateApplicationStatus(id: string, status: ApplicationStatus, reason?: string) { const app = await prisma.application.findUnique({ where: { id }, include: { company: { include: { user: true } }, tender: true } }); if (!app) return notFound('Application not found'); const updated = await prisma.application.update({ where: { id }, data: { status, rejectionReason: reason } }); const type = status === 'ACCEPTED' ? NotificationType.APPLICATION_ACCEPTED : NotificationType.APPLICATION_REJECTED; await prisma.notification.create({ data: { userId: app.company.userId, title: status === 'ACCEPTED' ? 'Application accepted' : 'Application rejected', message: status === 'ACCEPTED' ? `Your application for ${app.tender.tenderNumber} has been accepted.` : `Your application was rejected: ${reason}`, type } }); return updated; }
+export async function blacklistCompany(companyId: string, reason: string) { const company = await prisma.company.findUnique({ where: { id: companyId }, include: { user: true } }); if (!company) return notFound('Company not found'); const updated = await prisma.company.update({ where: { id: companyId }, data: { status: CompanyStatus.BLACKLISTED, blacklistReason: reason } }); await prisma.notification.create({ data: { userId: company.userId, title: 'Bidder account blacklisted', message: `Your company has been blacklisted: ${reason}`, type: NotificationType.BLACKLISTED } }); return updated; }

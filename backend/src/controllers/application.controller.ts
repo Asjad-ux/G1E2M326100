@@ -1,0 +1,12 @@
+import type { Request, Response } from 'express';
+import { ApplicationStatus } from '@prisma/client';
+import * as service from '../services/application.service.js';
+import { success } from '../utils/response.js';
+export const apply=async(req:Request,res:Response)=>success(res,await service.submitApplication(req.auth!.userId,String(req.params.tenderId),req.body.documents||[]),201);
+export const bidderList=async(req:Request,res:Response)=>success(res,await service.listBidderApplications(req.auth!.userId));
+export const bidderGet=async(req:Request,res:Response)=>success(res,await service.getBidderApplication(req.auth!.userId,String(req.params.id)));
+export const officerList=async(req:Request,res:Response)=>success(res,await service.listTenderApplications(String(req.params.tenderId)));
+export const officerGet=async(req:Request,res:Response)=>success(res,await service.getOfficerApplication(String(req.params.id)));
+export const accept=async(req:Request,res:Response)=>success(res,await service.updateApplicationStatus(String(req.params.id),ApplicationStatus.ACCEPTED));
+export const reject=async(req:Request,res:Response)=>success(res,await service.updateApplicationStatus(String(req.params.id),ApplicationStatus.REJECTED,req.body.reason));
+export const blacklist=async(req:Request,res:Response)=>success(res,await service.blacklistCompany(String(req.params.companyId),req.body.reason));
