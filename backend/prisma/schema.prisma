@@ -83,6 +83,7 @@ model Tender {
   applications Application[]
   officer      OfficerProfile     @relation(fields: [officerId], references: [id], map: "Tender_officerId_fkey")
   requirements TenderRequirement[]
+  documents    TenderDocument[]
 
   @@index([officerId], map: "Tender_officerId_fkey")
   @@map("Tender")
@@ -104,12 +105,36 @@ model TenderRequirement {
   @@map("TenderRequirement")
 }
 
+model TenderDocument {
+  id                    String   @id @default(cuid())
+  tenderId              String
+  fileName              String
+  originalFileName      String?
+  mimeType              String?
+  fileSize              Int?
+  cloudinaryPublicId    String?  @unique(map: "TenderDocument_cloudinaryPublicId_key")
+  cloudinaryUrl         String?  @db.Text
+  cloudinaryResourceType String? @default("raw")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  tender                Tender   @relation(fields: [tenderId], references: [id], onDelete: Cascade, map: "TenderDocument_tenderId_fkey")
+
+  @@index([tenderId], map: "TenderDocument_tenderId_idx")
+  @@map("TenderDocument")
+}
+
 model Document {
   id                   String                @id @default(cuid())
   companyId            String
   documentType         String
   fileName             String
-  fileUrl              String
+  fileUrl              String   @db.Text
+  originalFileName     String?
+  mimeType             String?
+  fileSize             Int?
+  cloudinaryPublicId   String?               @unique(map: "Document_cloudinaryPublicId_key")
+  cloudinaryUrl        String?  @db.Text
+  cloudinaryResourceType String?             @default("raw")
   status               DocumentStatus        @default(PENDING)
   uploadedAt           DateTime              @default(now())
   updatedAt            DateTime              @updatedAt

@@ -10,7 +10,7 @@ export function issueAccessToken(payload: AuthPayload): string {
 }
 
 export function issueRefreshToken(payload: AuthPayload): string {
-  return jwt.sign(payload, env.refreshTokenSecret, { expiresIn: env.refreshTokenExpiresIn as SignOptions['expiresIn'] });
+  return jwt.sign(payload, env.refreshTokenSecret, { expiresIn: env.refreshTokenExpiresIn as SignOptions['expiresIn'], jwtid: crypto.randomUUID() });
 }
 
 export function verifyAccessToken(token: string): AuthPayload { return jwt.verify(token, env.jwtSecret) as AuthPayload; }
