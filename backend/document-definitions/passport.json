@@ -1,0 +1,17 @@
+{
+  "documentType": "PASSPORT",
+  "documentName": "Passport",
+  "description": "Passport identity document",
+  "isActive": true,
+  "isExpirable": true,
+  "expiryField": "passportExpiryDate",
+  "fields": {
+    "passportNumber": { "label": "Passport Number", "type": "string", "required": true, "sensitive": true, "validation": { "type": "regex", "pattern": "^[A-Z][0-9]{7}$" }, "ocrAliases": ["Passport No", "Passport Number"], "normalization": "PASSPORT" },
+    "passportName": { "label": "Name on Passport", "type": "string", "required": true, "sensitive": true, "ocrAliases": ["Surname", "Given Names", "Given Name", "Name"], "normalization": "PASSPORT" },
+    "passportDateOfBirth": { "label": "Date of Birth", "type": "date", "required": true, "sensitive": true, "ocrAliases": ["Date of Birth", "DOB", "Birth"], "normalization": "PASSPORT" },
+    "nationality": { "label": "Nationality", "type": "string", "required": true, "sensitive": false, "ocrAliases": ["Nationality", "Nationality Code"], "normalization": "PASSPORT" },
+    "passportIssueDate": { "label": "Issue Date", "type": "date", "required": true, "sensitive": true, "ocrAliases": ["Date of Issue", "Issue Date", "Issued"], "normalization": "PASSPORT" },
+    "passportExpiryDate": { "label": "Expiry Date", "type": "date", "required": true, "sensitive": true, "ocrAliases": ["Date of Expiry", "Expiry Date", "Expires"], "normalization": "PASSPORT" },
+    "placeOfBirth": { "label": "Place of Birth", "type": "string", "required": true, "sensitive": true, "ocrAliases": ["Place of Birth", "Birth Place", "Birthplace", "Place Birth"], "normalization": "PASSPORT" }
+  }
+}

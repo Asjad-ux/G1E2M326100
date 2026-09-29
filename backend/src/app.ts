@@ -8,12 +8,14 @@ import authRoutes from './routes/auth.routes.js';
 import officerRoutes from './routes/officer.routes.js';
 import bidderRoutes from './routes/bidder.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import documentDefinitionRoutes from './routes/document-definition.routes.js';
 import { errorHandler } from './middleware/error.js';
 import { success } from './utils/response.js';
 
 export const app=express();
 app.use(helmet()); app.use(cors({origin:env.frontendUrl,credentials:true})); app.use(express.json({limit:'1mb'})); app.use(morgan(env.nodeEnv==='production'?'combined':'dev'));
 app.use('/api/auth',rateLimit({windowMs:15*60*1000,max:100,standardHeaders:true,legacyHeaders:false}),authRoutes);
-app.get('/api/health',(_req,res)=>res.json({success:true,message:'CPCL backend is running'}));
+app.get('/api/health',(_req,res)=>res.json({success:true,message:'BidEazy backend is running'}));
 app.use('/api/officer',officerRoutes); app.use('/api/bidder',bidderRoutes); app.use('/api/notifications',notificationRoutes);
+app.use('/api/documents/definitions', documentDefinitionRoutes);
 app.use((_req,res)=>res.status(404).json({success:false,message:'Route not found',errors:[]})); app.use(errorHandler);

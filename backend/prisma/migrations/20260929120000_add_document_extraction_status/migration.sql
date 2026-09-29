@@ -1,0 +1,2 @@
+ALTER TABLE `Document`
+    ADD COLUMN `extractionStatus` ENUM('SUCCESS', 'REVIEW', 'FAILED') NOT NULL DEFAULT 'REVIEW';

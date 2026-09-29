@@ -1,12 +1,12 @@
 import { UserRole } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
-import { forbidden, unauthorized, badRequest, AppError } from '../utils/errors.js';
+import { forbidden, unauthorized, badRequest, conflict, AppError } from '../utils/errors.js';
 import { hashPassword, comparePassword } from '../utils/password.js';
 import { hashToken, issueAccessToken, issueRefreshToken, refreshExpiry, verifyRefreshToken } from '../utils/tokens.js';
-import { DEVELOPMENT_PHONE_OTP, sendDevelopmentPhoneOTP, verifyDevelopmentPhoneOTP } from './development-phone-otp.service.js';
 import { sendEmailOTP, verifyEmailOTP } from './email-otp.service.js';
+import { invalidIndianPhoneMessage, normalizeIndianPhone } from '../utils/phone.js';
 
-const userSelect = { id: true, name: true, email: true, phone: true, role: true, emailVerified: true, phoneVerified: true, isActive: true, company: true, officerProfile: true } as const;
+const userSelect = { id: true, name: true, email: true, phone: true, role: true, emailVerified: true, phoneVerified: true, isActive: true, company: true, officerProfile: true, panNumber: true, panName: true, fatherName: true, dateOfBirth: true, aadhaarNumber: true, aadhaarName: true, aadhaarDateOfBirth: true, passportNumber: true, passportName: true, passportDateOfBirth: true, nationality: true, passportIssueDate: true, passportExpiryDate: true, placeOfBirth: true, gstin: true, gstinLegalName: true, cin: true, cinLegalName: true, msmeNumber: true, msmeName: true } as const;
 
 function publicUser(user: any) { const { passwordHash: _passwordHash, ...safe } = user; return safe; }
 
@@ -18,15 +18,30 @@ async function tokensFor(user: { id: string; role: UserRole }) {
   return { accessToken, refreshToken };
 }
 
+function canonicalPhone(value: unknown) {
+  const normalized = normalizeIndianPhone(value);
+  if (!normalized) badRequest(invalidIndianPhoneMessage);
+  return normalized;
+}
+
+async function ensurePhoneAvailable(phone: string) {
+  const existing = await prisma.user.findUnique({ where: { phone }, select: { id: true } });
+  if (existing) conflict('Phone number is already registered');
+}
+
 export async function registerOfficer(data: any) {
+  const phone = canonicalPhone(data.phone);
+  await ensurePhoneAvailable(phone);
   const passwordHash = await hashPassword(data.password);
-  const user = await prisma.user.create({ data: { name: data.name, email: data.email.toLowerCase(), phone: data.phone, passwordHash, role: UserRole.OFFICER, officerProfile: { create: { employeeId: data.employeeId, department: data.department, designation: data.designation } } }, select: userSelect });
+  const user = await prisma.user.create({ data: { name: data.name, email: data.email.toLowerCase(), phone, passwordHash, role: UserRole.OFFICER, officerProfile: { create: { employeeId: data.employeeId, department: data.department, designation: data.designation } } }, select: userSelect });
   return publicUser(user);
 }
 
 export async function registerBidder(data: any) {
+  const phone = canonicalPhone(data.phone);
+  await ensurePhoneAvailable(phone);
   const passwordHash = await hashPassword(data.password);
-  const user = await prisma.user.create({ data: { name: data.name, email: data.email.toLowerCase(), phone: data.phone, passwordHash, role: UserRole.BIDDER, company: { create: { companyName: data.company.companyName, cin: data.company.cin, pan: data.company.pan, gstin: data.company.gstin, msmeNumber: data.company.msmeNumber, contactEmail: data.email, contactPhone: data.phone } } }, select: userSelect });
+  const user = await prisma.user.create({ data: { name: data.name, email: data.email.toLowerCase(), phone, passwordHash, role: UserRole.BIDDER, company: { create: { companyName: data.company.companyName, contactEmail: data.email, contactPhone: phone } } }, select: userSelect });
   return publicUser(user);
 }
 
@@ -38,6 +53,12 @@ export async function login(email: string, password: string) {
   return { ...(await tokensFor(user)), user: publicUser(user) };
 }
 
+export async function getCurrentUser(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: userSelect });
+  if (!user) return unauthorized('User account not found');
+  return publicUser(user);
+}
+
 export async function refresh(rawToken: string) {
   let payload; try { payload = verifyRefreshToken(rawToken); } catch { return unauthorized('Invalid or expired refresh token'); }
   const stored = await prisma.refreshToken.findFirst({ where: { tokenHash: hashToken(rawToken), userId: payload.sub, revoked: false, expiresAt: { gt: new Date() } }, include: { user: true } });
@@ -47,17 +68,6 @@ export async function refresh(rawToken: string) {
 }
 
 export async function logout(rawToken: string) { await prisma.refreshToken.updateMany({ where: { tokenHash: hashToken(rawToken) }, data: { revoked: true } }); }
-
-export async function sendPhone(phone: string) { await sendDevelopmentPhoneOTP(phone); return { success: true, message: 'Development OTP sent', developmentOtp: DEVELOPMENT_PHONE_OTP }; }
-
-export async function verifyPhone(phone: string, code: string) {
-  const verified = await verifyDevelopmentPhoneOTP(phone, code);
-  if (!verified) return badRequest('Invalid or expired verification code');
-  const user = await prisma.user.findUnique({ where: { phone } });
-  if (!user) return badRequest('No account is registered with this phone number');
-  await prisma.user.update({ where: { id: user.id }, data: { phoneVerified: true } });
-  return { success: true, verified: true };
-}
 
 export async function sendEmail(email: string) { return sendEmailOTP(email); }
 export async function verifyEmail(email: string, code: string) { return verifyEmailOTP(email, code); }

@@ -1,0 +1,12 @@
+{
+  "documentType": "MSME",
+  "documentName": "MSME / Udyam Certificate",
+  "description": "Udyam registration certificate",
+  "isActive": true,
+  "isExpirable": false,
+  "expiryField": null,
+  "fields": {
+    "msmeNumber": { "label": "Udyam Registration Number", "type": "string", "required": true, "sensitive": true, "validation": { "type": "regex", "pattern": "^UDYAM-[A-Z]{2}-[0-9]{2}-[0-9]{7}$" }, "ocrAliases": ["Udyam Registration Number", "Udyam No", "MSME Number"] },
+    "msmeName": { "label": "Enterprise Name", "type": "string", "required": true, "sensitive": false, "ocrAliases": ["Name of Enterprise", "Enterprise Name"] }
+  }
+}

@@ -141,3 +141,11 @@ export function getDeliveryUrl(publicId: string, resourceType = 'raw', download 
     attachment: true,
   });
 }
+
+/** Fetches a short-lived authorized copy into memory for downstream processing. */
+export async function downloadFile(publicId: string, resourceType = 'raw') {
+  const url = getDeliveryUrl(publicId, resourceType, false);
+  const response = await fetch(url);
+  if (!response.ok) throw new AppError(502, `Cloudinary document delivery failed with HTTP ${response.status}`);
+  return Buffer.from(await response.arrayBuffer());
+}

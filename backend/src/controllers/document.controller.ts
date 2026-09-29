@@ -4,7 +4,7 @@ import { getDeliveryUrl } from '../services/cloudinary.service.js';
 import { notFound } from '../utils/errors.js';
 import { success, message } from '../utils/response.js';
 
-export const create = async (req: Request, res: Response) => success(res, await service.createDocument(req.auth!.userId, String(req.body.documentType), req.file), 201);
+export const create = async (req: Request, res: Response) => success(res, await service.createDocument(req.auth!.userId, String(req.body.documentType), req.file, false, req.body.documentName), 201);
 export const list = async (req: Request, res: Response) => success(res, await service.listDocuments(req.auth!.userId));
 export const get = async (req: Request, res: Response) => success(res, await service.getDocument(req.auth!.userId, String(req.params.id)));
 export const patch = async (req: Request, res: Response) => success(res, await service.updateDocument(req.auth!.userId, String(req.params.id), req.body, req.file), 200);

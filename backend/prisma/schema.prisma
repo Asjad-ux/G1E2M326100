@@ -24,6 +24,27 @@ model User {
   notifications          Notification[]
   officerProfile         OfficerProfile?
   refreshTokens          RefreshToken[]
+  documentRequests       DocumentRequest[]
+  panNumber              String?
+  panName                String?
+  fatherName             String?
+  dateOfBirth            DateTime?
+  aadhaarNumber          String?
+  aadhaarName            String?
+  aadhaarDateOfBirth     DateTime?
+  passportNumber         String?
+  passportName           String?
+  passportDateOfBirth    DateTime?
+  nationality             String?
+  passportIssueDate      DateTime?
+  passportExpiryDate     DateTime?
+  placeOfBirth           String?
+  gstin                  String?
+  gstinLegalName         String?
+  cin                    String?
+  cinLegalName           String?
+  msmeNumber             String?
+  msmeName               String?
 
   @@map("User")
 }
@@ -93,6 +114,7 @@ model TenderRequirement {
   id                   String                @id @default(cuid())
   tenderId             String
   name                 String
+  documentType         String?
   category             RequirementCategory
   required             Boolean               @default(true)
   description          String?
@@ -127,6 +149,7 @@ model Document {
   id                   String                @id @default(cuid())
   companyId            String
   documentType         String
+  documentName         String?
   fileName             String
   fileUrl              String   @db.Text
   originalFileName     String?
@@ -136,13 +159,34 @@ model Document {
   cloudinaryUrl        String?  @db.Text
   cloudinaryResourceType String?             @default("raw")
   status               DocumentStatus        @default(PENDING)
+  extractionStatus     DocumentExtractionStatus @default(REVIEW)
   uploadedAt           DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
+  expiresAt            DateTime?
   applicationDocuments ApplicationDocument[]
   company              Company               @relation(fields: [companyId], references: [id], onDelete: Cascade, map: "Document_companyId_fkey")
 
   @@index([companyId], map: "Document_companyId_idx")
   @@map("Document")
+}
+
+model DocumentRequest {
+  id                String                @id @default(cuid())
+  requestedByUserId String
+  requestedByName   String
+  documentName      String
+  reason            String
+  status            DocumentRequestStatus @default(PENDING)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  adminComment      String?
+  requestedBy       User                  @relation(fields: [requestedByUserId], references: [id], onDelete: Cascade, map: "DocumentRequest_requestedByUserId_fkey")
+
+  @@index([requestedByUserId], map: "DocumentRequest_requestedByUserId_idx")
+  @@index([documentName, status], map: "DocumentRequest_documentName_status_idx")
+  @@map("DocumentRequest")
 }
 
 model Application {
@@ -265,13 +309,28 @@ enum NotificationType {
   BLACKLISTED
   NEW_BID
   DOCUMENT_REVIEW
+  DOCUMENT_EXPIRED
 }
 
 enum DocumentStatus {
   PENDING
   VERIFIED
+  INVALID
   REVIEW
   FAILED
+  EXPIRED
+}
+
+enum DocumentExtractionStatus {
+  SUCCESS
+  REVIEW
+  FAILED
+}
+
+enum DocumentRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum UserRole {

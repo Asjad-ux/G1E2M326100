@@ -1,0 +1,177 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum EntityType {
+  PERSON
+  COMPANY
+}
+
+enum EntityStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum GSTStatus {
+  ACTIVE
+  CANCELLED
+  SUSPENDED
+}
+
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+  STRUCK_OFF
+}
+
+enum PhoneType {
+  MOBILE
+  LANDLINE
+}
+
+enum EmailType {
+  PERSONAL
+  BUSINESS
+}
+
+model VerificationEntity {
+  id                   Int              @id @default(autoincrement())
+  entityType           EntityType       @map("entity_type")
+  name                 String           @db.VarChar(180)
+  dateOfBirth          DateTime?        @map("date_of_birth") @db.Date
+  dateOfIncorporation  DateTime?        @map("date_of_incorporation") @db.Date
+  address              String           @db.VarChar(255)
+  city                 String           @db.VarChar(80)
+  state                String           @db.VarChar(80)
+  pincode              String           @db.Char(6)
+  status               EntityStatus
+  createdAt            DateTime         @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt            DateTime         @updatedAt @map("updated_at") @db.DateTime(3)
+  aadhaarRecords       AadhaarRecord[]
+  gstRecords           GSTRecord[]
+  cinRecords           CINRecord[]
+  msmeRecords          MSMERecord[]
+  phoneRecords         PhoneRecord[]
+  emailRecords         EmailRecord[]
+
+  @@index([entityType])
+  @@index([status])
+  @@map("VerificationEntities")
+}
+
+model AadhaarRecord {
+  id            Int               @id @default(autoincrement())
+  entityId      Int               @map("entity_id")
+  aadhaarNumber String            @unique @map("aadhaar_number") @db.Char(12)
+  status        RecordStatus
+  createdAt     DateTime          @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime          @updatedAt @map("updated_at") @db.DateTime(3)
+  entity        VerificationEntity @relation(fields: [entityId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "AadhaarRecords_entity_id_fkey")
+
+  @@index([entityId])
+  @@map("AadhaarRecords")
+}
+
+model GSTRecord {
+  id               Int               @id @default(autoincrement())
+  entityId         Int               @map("entity_id")
+  gstin            String            @unique @db.Char(15)
+  legalName        String            @map("legal_name") @db.VarChar(180)
+  tradeName        String            @map("trade_name") @db.VarChar(180)
+  registrationDate DateTime          @map("registration_date") @db.Date
+  status           GSTStatus
+  createdAt        DateTime          @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.DateTime(3)
+  entity           VerificationEntity @relation(fields: [entityId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "GSTRecords_entity_id_fkey")
+
+  @@index([entityId])
+  @@index([status])
+  @@map("GSTRecords")
+}
+
+model CINRecord {
+  id               Int               @id @default(autoincrement())
+  entityId         Int               @map("entity_id")
+  cin              String            @unique @db.Char(21)
+  companyName      String            @map("company_name") @db.VarChar(180)
+  incorporationDate DateTime         @map("incorporation_date") @db.Date
+  companyStatus    CompanyStatus     @map("company_status")
+  registeredAddress String            @map("registered_address") @db.VarChar(255)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.DateTime(3)
+  entity           VerificationEntity @relation(fields: [entityId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "CINRecords_entity_id_fkey")
+
+  @@index([entityId])
+  @@index([companyStatus])
+  @@map("CINRecords")
+}
+
+model MSMERecord {
+  id               Int               @id @default(autoincrement())
+  entityId         Int               @map("entity_id")
+  udyamNumber      String            @unique @map("udyam_number") @db.VarChar(20)
+  enterpriseName   String            @map("enterprise_name") @db.VarChar(180)
+  organisationType String            @map("organisation_type") @db.VarChar(80)
+  majorActivity    String            @map("major_activity") @db.VarChar(120)
+  registrationDate DateTime          @map("registration_date") @db.Date
+  status           RecordStatus
+  createdAt        DateTime          @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.DateTime(3)
+  entity           VerificationEntity @relation(fields: [entityId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "MSMERecords_entity_id_fkey")
+
+  @@index([entityId])
+  @@index([status])
+  @@map("MSMERecords")
+}
+
+model PhoneRecord {
+  id          Int               @id @default(autoincrement())
+  entityId    Int               @map("entity_id")
+  phoneNumber String            @unique @map("phone_number") @db.VarChar(15)
+  phoneType   PhoneType         @map("phone_type")
+  status      RecordStatus
+  createdAt   DateTime          @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.DateTime(3)
+  entity      VerificationEntity @relation(fields: [entityId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "PhoneRecords_entity_id_fkey")
+
+  @@index([entityId])
+  @@map("PhoneRecords")
+}
+
+model EmailRecord {
+  id         Int               @id @default(autoincrement())
+  entityId   Int               @map("entity_id")
+  email      String            @unique @db.VarChar(320)
+  emailType  EmailType         @map("email_type")
+  status     RecordStatus
+  createdAt  DateTime          @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt  DateTime          @updatedAt @map("updated_at") @db.DateTime(3)
+  entity     VerificationEntity @relation(fields: [entityId], references: [id], onDelete: Restrict, onUpdate: Cascade, map: "EmailRecords_entity_id_fkey")
+
+  @@index([entityId])
+  @@map("EmailRecords")
+}
+
+model PanVerification {
+  id         Int      @id @default(autoincrement())
+  panNumber  String   @unique @map("pan_number") @db.Char(10)
+  panName    String   @map("pan_name") @db.VarChar(180)
+  fatherName String   @map("father_name") @db.VarChar(180)
+  dateOfBirth DateTime @map("date_of_birth") @db.Date
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+
+  @@map("PanVerifications")
+}

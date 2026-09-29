@@ -1,6 +1,7 @@
 import { TenderStatus } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { notFound } from '../utils/errors.js';
+import { documentDefinitionExists } from './document-definition.service.js';
 
 const tenderInclude = {
   requirements: true,
@@ -63,7 +64,8 @@ export async function listActiveTenders() {
 export async function addRequirement(officerUserId: string, tenderId: string, data: any) {
   const owner = await prisma.tender.findFirst({ where: { id: tenderId, officer: { userId: officerUserId } } });
   if (!owner) return notFound('Tender not found');
-  return prisma.tenderRequirement.create({ data: { tenderId, ...data } });
+  const documentType = data.documentType?.trim().toUpperCase() || (documentDefinitionExists(data.name) ? data.name.trim().toUpperCase() : null);
+  return prisma.tenderRequirement.create({ data: { tenderId, ...data, documentType } });
 }
 
 export async function listRequirements(tenderId: string) { return prisma.tenderRequirement.findMany({ where: { tenderId }, orderBy: { createdAt: 'asc' } }); }

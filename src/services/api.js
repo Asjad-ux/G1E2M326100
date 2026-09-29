@@ -26,10 +26,10 @@ async function refreshAccessToken() {
 
 export async function request(path, options = {}, retry = true) {
   const headers = new Headers(options.headers || {});
-  if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   if (authStorage.accessToken) headers.set('Authorization', `Bearer ${authStorage.accessToken}`);
   let response = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  if (response.status === 401 && retry && await refreshAccessToken()) { const retryHeaders = new Headers(options.headers || {}); if (options.body && !retryHeaders.has('Content-Type')) retryHeaders.set('Content-Type', 'application/json'); if (authStorage.accessToken) retryHeaders.set('Authorization', `Bearer ${authStorage.accessToken}`); response = await fetch(`${API_BASE}${path}`, { ...options, headers: retryHeaders }); }
+  if (response.status === 401 && retry && await refreshAccessToken()) { const retryHeaders = new Headers(options.headers || {}); if (options.body && !(options.body instanceof FormData) && !retryHeaders.has('Content-Type')) retryHeaders.set('Content-Type', 'application/json'); if (authStorage.accessToken) retryHeaders.set('Authorization', `Bearer ${authStorage.accessToken}`); response = await fetch(`${API_BASE}${path}`, { ...options, headers: retryHeaders }); }
   if (response.status === 401 && retry) window.dispatchEvent(new CustomEvent('cpcl:auth-expired'));
   return parseResponse(response);
 }
@@ -38,7 +38,7 @@ const post = (path, body) => request(path, { method: 'POST', body: JSON.stringif
 const patch = (path, body) => request(path, { method: 'PATCH', body: JSON.stringify(body) });
 
 export const authApi = {
-  login: (email, password) => post('/api/auth/login', { email, password }), registerOfficer: data => post('/api/auth/register/officer', data), registerBidder: data => post('/api/auth/register/bidder', data), sendEmailOtp: email => post('/api/auth/otp/email/send', { email }), verifyEmailOtp: (email, code) => post('/api/auth/otp/email/verify', { email, code }), sendPhoneOtp: phone => post('/api/auth/otp/phone/send', { phone }), verifyPhoneOtp: (phone, code) => post('/api/auth/otp/phone/verify', { phone, code }), forgotPassword: email => post('/api/auth/forgot-password', { email }), resetPassword: (token, password) => post('/api/auth/reset-password', { token, password }), logout: async () => { if (authStorage.refreshToken) await post('/api/auth/logout', { refreshToken: authStorage.refreshToken }).catch(() => {}); authStorage.clear(); }
+  login: (email, password) => post('/api/auth/login', { email, password }), registerOfficer: data => post('/api/auth/register/officer', data), registerBidder: data => post('/api/auth/register/bidder', data), sendEmailOtp: email => post('/api/auth/otp/email/send', { email }), verifyEmailOtp: (email, code) => post('/api/auth/otp/email/verify', { email, code }), forgotPassword: email => post('/api/auth/forgot-password', { email }), resetPassword: (token, password) => post('/api/auth/reset-password', { token, password }), logout: async () => { if (authStorage.refreshToken) await post('/api/auth/logout', { refreshToken: authStorage.refreshToken }).catch(() => {}); authStorage.clear(); }
 };
 
 export const officerApi = {
@@ -46,7 +46,7 @@ export const officerApi = {
 };
 
 export const bidderApi = {
-  tenders: () => request('/api/bidder/tenders'), tender: id => request(`/api/bidder/tenders/${encodeURIComponent(id)}`), applications: () => request('/api/bidder/applications'), application: id => request(`/api/bidder/applications/${encodeURIComponent(id)}`), apply: (tenderId, documents = []) => post(`/api/bidder/tenders/${encodeURIComponent(tenderId)}/apply`, { documents }), documents: () => request('/api/bidder/documents'), document: id => request(`/api/bidder/documents/${encodeURIComponent(id)}`), createDocument: data => post('/api/bidder/documents', data), updateDocument: (id, data) => patch(`/api/bidder/documents/${encodeURIComponent(id)}`, data), deleteDocument: id => request(`/api/bidder/documents/${encodeURIComponent(id)}`, { method: 'DELETE' }), attachDocument: (applicationId, data) => post(`/api/bidder/applications/${encodeURIComponent(applicationId)}/documents`, data)
+  tenders: () => request('/api/bidder/tenders'), tender: id => request(`/api/bidder/tenders/${encodeURIComponent(id)}`), applications: () => request('/api/bidder/applications'), application: id => request(`/api/bidder/applications/${encodeURIComponent(id)}`), apply: (tenderId, documents = []) => post(`/api/bidder/tenders/${encodeURIComponent(tenderId)}/apply`, { documents }), documents: () => request('/api/bidder/documents'), document: id => request(`/api/bidder/documents/${encodeURIComponent(id)}`), createDocument: data => request('/api/bidder/documents', { method: 'POST', body: data instanceof FormData ? data : JSON.stringify(data) }), updateDocument: (id, data) => patch(`/api/bidder/documents/${encodeURIComponent(id)}`, data), deleteDocument: id => request(`/api/bidder/documents/${encodeURIComponent(id)}`, { method: 'DELETE' }), attachDocument: (applicationId, data) => post(`/api/bidder/applications/${encodeURIComponent(applicationId)}/documents`, data)
 };
 
 export const notificationApi = { list: () => request('/api/notifications'), read: id => patch(`/api/notifications/${encodeURIComponent(id)}/read`), readAll: () => post('/api/notifications/read-all') };

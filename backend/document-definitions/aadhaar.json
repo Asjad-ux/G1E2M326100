@@ -1,0 +1,25 @@
+{
+  "documentType": "AADHAAR",
+  "documentName": "Aadhaar Card",
+  "description": "Aadhaar identity document",
+  "isActive": true,
+  "isExpirable": false,
+  "expiryField": null,
+  "fields": {
+    "aadhaarNumber": {
+      "label": "Aadhaar Number",
+      "type": "string",
+      "required": true,
+      "sensitive": true,
+      "validation": { "type": "regex", "pattern": "^[0-9]{4}[ -]?[0-9]{4}[ -]?[0-9]{4}$" },
+      "ocrAliases": ["Aadhaar Number", "UIDAI", "Aadhaar No"]
+    },
+    "aadhaarDateOfBirth": {
+      "label": "Date of Birth",
+      "type": "date",
+      "required": false,
+      "sensitive": true,
+      "ocrAliases": ["Date of Birth", "DOB", "Year of Birth"]
+    }
+  }
+}

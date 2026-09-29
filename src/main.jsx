@@ -9,7 +9,7 @@ export const AppContext = createContext(null);
 export const bidderCompanies = [];
 const formatDate = value => value ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const normalizeRequirement = requirement => ({ ...requirement, type: requirement.required ? 'Mandatory' : 'Optional', note: requirement.description || '' });
-const normalizeTender = tender => ({ ...tender, displayId: tender.tenderNumber, department: tender.category, organisation: 'CPCL', location: 'Chennai', value: '—', published: formatDate(tender.startDate), closing: formatDate(tender.closingDate), applications: tender._count?.applications || 0, pending: 0, requirements: (tender.requirements || []).map(normalizeRequirement) });
+const normalizeTender = tender => ({ ...tender, displayId: tender.tenderNumber, department: tender.category, organisation: 'BidEazy', location: 'Chennai', value: '—', published: formatDate(tender.startDate), closing: formatDate(tender.closingDate), applications: tender._count?.applications || 0, pending: 0, requirements: (tender.requirements || []).map(normalizeRequirement) });
 const normalizeApplication = application => ({ ...application, bidder: application.company?.companyName || 'Unknown company', submitted: formatDate(application.submittedAt), compliance: application.complianceScore ?? 0, risk: application.complianceScore >= 85 ? 'Low' : application.complianceScore >= 70 ? 'Medium' : 'High', status: application.status?.replaceAll('_', ' ') || 'Under Review', updated: formatDate(application.updatedAt || application.submittedAt) });
 
 export function AppProvider({ children }) {

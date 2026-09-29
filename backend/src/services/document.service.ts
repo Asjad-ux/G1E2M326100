@@ -2,6 +2,8 @@ import type { Express } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { badRequest, conflict, notFound } from '../utils/errors.js';
 import { deleteFile, uploadFile } from './cloudinary.service.js';
+import { getActiveDocumentDefinitions, getDocumentDefinition } from './document-definition.service.js';
+import { processUploadedDocument } from './document-processing.service.js';
 
 const allowedMimeTypes = new Set([
   'application/pdf',
@@ -10,9 +12,16 @@ const allowedMimeTypes = new Set([
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
+const CUSTOM_DOCUMENT_TYPE = 'OTHERS';
+
+function normalizeDocumentType(value: string) {
+  const normalized = value.trim().toUpperCase();
+  return normalized === 'OTHER' ? CUSTOM_DOCUMENT_TYPE : normalized;
+}
 
 function validateUpload(file?: Express.Multer.File) {
   if (!file) return badRequest('A document file is required');
+  if (file.size <= 0) return badRequest('Document file must not be empty.');
   if (!allowedMimeTypes.has(file.mimetype)) return badRequest('Unsupported document type. Upload PDF, JPG, JPEG, PNG, DOC, or DOCX.');
   if (file.size > 10 * 1024 * 1024) return badRequest('Document file size must not exceed 10 MB.');
   return file;
@@ -37,12 +46,21 @@ async function bidderCompany(userId: string) {
   return company;
 }
 
-export async function createDocument(userId: string, documentType: string, file?: Express.Multer.File) {
+export async function createDocument(userId: string, documentType: string, file?: Express.Multer.File, allowLegacy = false, documentName?: string) {
   const company = await bidderCompany(userId);
+  const requestedType = normalizeDocumentType(documentType);
+  const isCustomDocument = requestedType === CUSTOM_DOCUMENT_TYPE;
+  const definition = getActiveDocumentDefinitions().find(item => item.documentType === requestedType);
+  if (!definition && !allowLegacy && !isCustomDocument) return badRequest('Document definition not available. Choose a supported document type.');
+  const normalizedName = documentName?.trim();
+  if (isCustomDocument && !normalizedName) return badRequest('Document name is required for Others.');
   const validFile = validateUpload(file);
-  const uploaded = await uploadFile({ userId, documentType, originalFileName: validFile.originalname, mimeType: validFile.mimetype, fileSize: validFile.size, buffer: validFile.buffer });
+  const normalizedType = definition?.documentType || requestedType;
+  const uploaded = await uploadFile({ userId, documentType: normalizedType, originalFileName: validFile.originalname, mimeType: validFile.mimetype, fileSize: validFile.size, buffer: validFile.buffer });
   try {
-    return await prisma.document.create({ data: { companyId: company.id, documentType, status: 'PENDING', ...cloudinaryMetadata(validFile, uploaded) } });
+    const document = await prisma.document.create({ data: { companyId: company.id, documentType: normalizedType, documentName: isCustomDocument ? normalizedName : null, status: isCustomDocument ? 'REVIEW' : 'PENDING', extractionStatus: isCustomDocument ? 'REVIEW' : 'REVIEW', ...cloudinaryMetadata(validFile, uploaded) } });
+    if (!isCustomDocument) void processUploadedDocument(document.id).catch(() => undefined);
+    return document;
   } catch (error) {
     await deleteFile(uploaded.publicId, uploaded.resourceType).catch(() => undefined);
     throw error;
@@ -70,17 +88,25 @@ export async function getOfficerDocument(officerUserId: string, id: string) {
   return link.document;
 }
 
-export async function updateDocument(userId: string, id: string, data: { documentType?: string }, file?: Express.Multer.File) {
+export async function updateDocument(userId: string, id: string, data: { documentType?: string; documentName?: string }, file?: Express.Multer.File) {
   const doc = await getDocument(userId, id);
-  if (!file) return prisma.document.update({ where: { id: doc.id }, data: { ...(data.documentType ? { documentType: data.documentType } : {}) } });
+  const requestedType = data.documentType ? normalizeDocumentType(data.documentType) : normalizeDocumentType(doc.documentType);
+  const isCustomDocument = requestedType === CUSTOM_DOCUMENT_TYPE;
+  const normalizedName = data.documentName?.trim() || doc.documentName || undefined;
+  if (isCustomDocument && !normalizedName) return badRequest('Document name is required for Others.');
+  if (!file) return prisma.document.update({ where: { id: doc.id }, data: { ...(data.documentType ? { documentType: requestedType } : {}), ...(isCustomDocument ? { documentName: normalizedName } : {}) } });
+  const definition = getDocumentDefinition(requestedType);
+  const legacyReplacement = !definition && requestedType === normalizeDocumentType(doc.documentType);
+  if ((!definition || !definition.isActive) && !legacyReplacement && !isCustomDocument) return badRequest('Document definition not available. Choose a supported document type.');
   const validFile = validateUpload(file);
   if (!doc.cloudinaryPublicId) return badRequest('Document is not connected to Cloudinary');
   const previousPublicId = doc.cloudinaryPublicId;
   const previousResourceType = doc.cloudinaryResourceType || 'raw';
-  const uploaded = await uploadFile({ userId, documentType: data.documentType || doc.documentType, originalFileName: validFile.originalname, mimeType: validFile.mimetype, fileSize: validFile.size, buffer: validFile.buffer });
+  const uploaded = await uploadFile({ userId, documentType: definition?.documentType || requestedType, originalFileName: validFile.originalname, mimeType: validFile.mimetype, fileSize: validFile.size, buffer: validFile.buffer });
   try {
-    const updated = await prisma.document.update({ where: { id: doc.id }, data: { ...(data.documentType ? { documentType: data.documentType } : {}), ...cloudinaryMetadata(validFile, uploaded) } });
+    const updated = await prisma.document.update({ where: { id: doc.id }, data: { documentType: definition?.documentType || requestedType, documentName: isCustomDocument ? normalizedName : null, status: isCustomDocument ? 'REVIEW' : 'PENDING', extractionStatus: isCustomDocument ? 'REVIEW' : 'REVIEW', ...cloudinaryMetadata(validFile, uploaded) } });
     await deleteFile(previousPublicId, previousResourceType).catch(() => undefined);
+    if (!isCustomDocument) void processUploadedDocument(updated.id).catch(() => undefined);
     return updated;
   } catch (error) {
     await deleteFile(uploaded.publicId, uploaded.resourceType).catch(() => undefined);
@@ -104,7 +130,8 @@ export async function attachApplicationDocument(userId: string, applicationId: s
   let documentId = data.documentId;
   let newlyUploadedId: string | undefined;
   if (file) {
-    const created = await createDocument(userId, data.documentType || 'Other', file);
+    const created = await createDocument(userId, data.documentType || 'Other', file, true);
+    if (!created) return badRequest('Document could not be created');
     documentId = created.id;
     newlyUploadedId = created.id;
   }

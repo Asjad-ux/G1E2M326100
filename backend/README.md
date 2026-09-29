@@ -11,14 +11,14 @@ Independent Express + TypeScript + MySQL 8 + Prisma API for the CPCL Tender Comp
 CREATE DATABASE cpcl_tender;
 ~~~
 
-3. Copy .env.example to .env, configure the MySQL URL, JWT secrets, Gmail SMTP values, and Cloudinary values.
+3. Copy .env.example to .env, configure the MySQL URL, JWT secrets, Gmail SMTP values, Cloudinary values, and the server-only OCR provider settings.
 4. Install dependencies, generate Prisma Client, migrate, seed, and start:
 
 ~~~powershell
 cd backend
 npm install
 Copy-Item .env.example .env
-# configure MySQL, Gmail SMTP, and Cloudinary credentials in .env
+# configure MySQL, Gmail SMTP, Cloudinary, and OCR provider credentials in .env
 npx prisma generate
 npx prisma migrate dev
 npm run prisma:seed
@@ -46,6 +46,22 @@ CLOUDINARY_API_SECRET="your-api-secret"
 4. Restart the backend after changing .env.
 
 Uploads are organized under CPCL-Procure/bidders/user_<userId>/<documentType>. Supported files are PDF, JPG, JPEG, PNG, DOC, and DOCX, up to 10 MB. Bidder endpoints enforce ownership. Officer view/download endpoints only allow documents attached to applications for tenders owned by the authenticated officer.
+
+Document Vault uploads store document metadata and the Cloudinary object, then run the first-stage pipeline `Cloudinary -> PaddleOCR -> JSON document definition extraction -> non-null User-field persistence`. The separate `Document.extractionStatus` is `SUCCESS` when all required JSON-defined fields are extracted, `REVIEW` when OCR succeeds but a required field is missing or ambiguous, and `FAILED` when the document/OCR processing fails. Existing `Document.status`, validation, verification, and final status rules are not changed by this stage. PaddleOCR configuration is server-only and is documented in `.env.example`.
+
+## PaddleOCR worker
+
+OCR runs in the isolated Python worker at `ocr-worker/paddle_worker.py`. The Node service downloads the Cloudinary bytes to a temporary file, invokes the worker, receives structured line text, confidence, bounding boxes, and page count as JSON, then removes the temporary file. The worker uses CPU inference on this Windows development machine and supports PDF, JPEG, and PNG input.
+
+The verified development setup is Python 3.11.9 with PaddlePaddle 3.3.1 and PaddleOCR 3.7.0:
+
+~~~powershell
+cd backend
+py -3.11 -m venv ocr-worker/.venv
+ocr-worker/.venv/Scripts/python.exe -m pip install -r ocr-worker/requirements.txt
+~~~
+
+The first OCR run may download the official PaddleOCR models. Keep `PADDLEOCR_PYTHON_PATH`, `PADDLEOCR_WORKER_PATH`, `PADDLEOCR_DEVICE`, and `PADDLEOCR_TIMEOUT_MS` server-side in `.env`.
 
 ## Document API
 
@@ -92,7 +108,7 @@ Import CPCL-Backend.postman_collection.json. Set baseUrl to http://localhost:500
 cd backend
 npm install
 Copy-Item .env.example .env
-# configure MySQL credentials, Gmail SMTP values, and Cloudinary credentials
+# configure MySQL credentials, Gmail SMTP values, Cloudinary credentials, and OCR provider credentials
 npx prisma generate
 npx prisma migrate dev
 npm run prisma:seed

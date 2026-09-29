@@ -63,8 +63,8 @@ export async function sendEmailVerificationCode(email: string, code: string) {
     await transport.sendMail({
       from: env.smtpFrom,
       to: email,
-      subject: 'CPCL email verification code',
-      html: `<p>Your CPCL email verification code is:</p><p style="font-size:24px;font-weight:700;letter-spacing:4px">${code}</p><p>This code expires in 10 minutes. If you did not request it, you can ignore this email.</p>`,
+      subject: 'BidEazy email verification code',
+      html: `<p>Your BidEazy email verification code is:</p><p style="font-size:24px;font-weight:700;letter-spacing:4px">${code}</p><p>This code expires in 10 minutes. If you did not request it, you can ignore this email.</p>`,
     });
   } catch (error) {
     if (error instanceof AppError) throw error;

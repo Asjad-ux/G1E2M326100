@@ -9,7 +9,14 @@
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "test:extraction": "tsx scripts/document-first-stage-check.ts",
+    "test:phone": "tsx scripts/phone-check.ts",
+    "test:auth-phone": "tsx scripts/phone-check.ts",
+    "test:verification": "tsx scripts/document-verification-check.ts",
+    "test:paddle-errors": "tsx scripts/paddle-error-check.ts",
+    "test:paddle-worker": ".\\ocr-worker\\.venv\\Scripts\\python.exe scripts\\paddle-worker-check.py",
+    "test:paddle-node": "tsx scripts/paddle-node-ocr-check.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

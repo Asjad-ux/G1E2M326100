@@ -1,0 +1,41 @@
+{
+  "documentType": "PAN",
+  "documentName": "PAN Card",
+  "description": "Permanent Account Number card",
+  "isActive": true,
+  "isExpirable": false,
+  "expiryField": null,
+  "fields": {
+    "panNumber": {
+      "label": "PAN Number",
+      "type": "string",
+      "required": true,
+      "sensitive": true,
+      "validation": { "type": "regex", "pattern": "^[A-Z]{5}[0-9]{4}[A-Z]$" },
+      "ocrAliases": ["PAN", "PAN Number", "Permanent Account Number"],
+      "normalization": "PAN"
+    },
+    "panName": {
+      "label": "Name on PAN",
+      "type": "string",
+      "required": true,
+      "sensitive": true,
+      "ocrAliases": ["Name", "Name on PAN"]
+    },
+    "fatherName": {
+      "label": "Father's Name",
+      "type": "string",
+      "required": true,
+      "sensitive": true,
+      "ocrAliases": ["Father's Name", "Fathers Name", "Father Name"],
+      "normalization": "PAN_FATHER_NAME"
+    },
+    "dateOfBirth": {
+      "label": "Date of Birth",
+      "type": "date",
+      "required": true,
+      "sensitive": true,
+      "ocrAliases": ["Date of Birth", "DOB"]
+    }
+  }
+}

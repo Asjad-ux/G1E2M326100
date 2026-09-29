@@ -1,0 +1,12 @@
+{
+  "documentType": "CIN",
+  "documentName": "CIN Certificate",
+  "description": "Corporate identification document",
+  "isActive": true,
+  "isExpirable": false,
+  "expiryField": null,
+  "fields": {
+    "cin": { "label": "CIN", "type": "string", "required": true, "sensitive": true, "validation": { "type": "regex", "pattern": "^[UL][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$" }, "ocrAliases": ["CIN", "Corporate Identity Number"] },
+    "cinLegalName": { "label": "Company Name", "type": "string", "required": true, "sensitive": false, "ocrAliases": ["Company Name", "Corporate Name"] }
+  }
+}
