@@ -1,5 +1,8 @@
 (function () {
-  const BASE = window.CPCL_API_URL || 'http://localhost:5000';
+  const configuredBase = typeof window.CPCL_API_URL === 'string' ? window.CPCL_API_URL.trim() : '';
+  const BASE = configuredBase && !configuredBase.startsWith('%VITE_')
+    ? configuredBase.replace(/\/+$/, '')
+    : 'http://localhost:5000';
   const ACCESS = 'cpcl_access_token';
   const REFRESH = 'cpcl_refresh_token';
   const USER = 'cpcl_user';
