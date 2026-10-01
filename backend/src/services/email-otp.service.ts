@@ -12,33 +12,54 @@ function normalizedEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
-async function createAndSendEmailOTP(client: any, userId: string, email: string) {
-  const normalized = normalizedEmail(email);
+export type PreparedEmailOTP = {
+  email: string;
+  code: string;
+  codeHash: string;
+  expiresAt: Date;
+};
+
+export async function prepareEmailOTP(email: string): Promise<PreparedEmailOTP> {
+  const code = String(randomInt(100000, 1000000));
+  return {
+    email: normalizedEmail(email),
+    code,
+    codeHash: await hashPassword(code),
+    expiresAt: new Date(Date.now() + OTP_TTL_MS),
+  };
+}
+
+export async function createEmailOTP(client: any, userId: string, prepared: PreparedEmailOTP) {
   await client.emailVerificationCode.updateMany({
     where: { userId, verified: false, usedAt: null },
     data: { usedAt: new Date() }
   });
 
-  const code = String(randomInt(100000, 1000000));
   const record = await client.emailVerificationCode.create({
     data: {
       userId,
-      email: normalized,
-      codeHash: await hashPassword(code),
-      expiresAt: new Date(Date.now() + OTP_TTL_MS)
+      email: prepared.email,
+      codeHash: prepared.codeHash,
+      expiresAt: prepared.expiresAt
     }
   });
 
-  try {
-    await sendEmailVerificationCode(normalized, code);
-  } catch (error) {
-    await client.emailVerificationCode.update({ where: { id: record.id }, data: { usedAt: new Date() } });
-    throw error;
-  }
+  return { id: record.id, email: prepared.email, code: prepared.code };
 }
 
-export async function sendEmailOTPForUser(client: any, userId: string, email: string) {
-  await createAndSendEmailOTP(client, userId, email);
+export async function sendPreparedEmailOTP(email: string, code: string) {
+  await sendEmailVerificationCode(email, code);
+}
+
+export async function sendEmailOTPForUser(userId: string, email: string) {
+  const prepared = await prepareEmailOTP(email);
+  const record = await createEmailOTP(prisma, userId, prepared);
+  try {
+    await sendPreparedEmailOTP(record.email, record.code);
+  } catch (error) {
+    await prisma.emailVerificationCode.update({ where: { id: record.id }, data: { usedAt: new Date() } });
+    throw error;
+  }
   return { success: true, message: 'Verification code sent to your email' };
 }
 
@@ -54,7 +75,7 @@ export async function sendEmailOTP(email: string) {
   if (!user) return { success: true, message: 'If the account exists, a verification code has been sent to your email' };
   if (user.emailVerified) return { success: true, message: 'Email is already verified' };
 
-  return sendEmailOTPForUser(prisma, user.id, normalized);
+  return sendEmailOTPForUser(user.id, normalized);
 }
 
 export async function verifyEmailOTP(email: string, code: string) {
