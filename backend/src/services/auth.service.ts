@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { forbidden, unauthorized, badRequest, conflict, AppError } from '../utils/errors.js';
 import { hashPassword, comparePassword } from '../utils/password.js';
 import { hashToken, issueAccessToken, issueRefreshToken, refreshExpiry, verifyRefreshToken } from '../utils/tokens.js';
-import { sendEmailOTP, verifyEmailOTP } from './email-otp.service.js';
+import { sendEmailOTP, sendEmailOTPForUser, verifyEmailOTP } from './email-otp.service.js';
 import { invalidIndianPhoneMessage, normalizeIndianPhone } from '../utils/phone.js';
 
 const userSelect = { id: true, name: true, email: true, phone: true, role: true, emailVerified: true, phoneVerified: true, isActive: true, company: true, officerProfile: true, panNumber: true, panName: true, fatherName: true, dateOfBirth: true, aadhaarNumber: true, aadhaarName: true, aadhaarDateOfBirth: true, passportNumber: true, passportName: true, passportDateOfBirth: true, nationality: true, passportIssueDate: true, passportExpiryDate: true, placeOfBirth: true, gstin: true, gstinLegalName: true, cin: true, cinLegalName: true, msmeNumber: true, msmeName: true } as const;
@@ -39,9 +39,57 @@ export async function registerOfficer(data: any) {
 
 export async function registerBidder(data: any) {
   const phone = canonicalPhone(data.phone);
-  await ensurePhoneAvailable(phone);
+  const email = data.email.trim().toLowerCase();
   const passwordHash = await hashPassword(data.password);
-  const user = await prisma.user.create({ data: { name: data.name, email: data.email.toLowerCase(), phone, passwordHash, role: UserRole.BIDDER, company: { create: { companyName: data.company.companyName, contactEmail: data.email, contactPhone: phone } } }, select: userSelect });
+  const user = await prisma.$transaction(async (tx) => {
+    const [existingByEmail, existingByPhone] = await Promise.all([
+      tx.user.findUnique({ where: { email }, select: { id: true, role: true, emailVerified: true, phoneVerified: true } }),
+      tx.user.findUnique({ where: { phone }, select: { id: true, role: true, emailVerified: true, phoneVerified: true } })
+    ]);
+
+    if (existingByEmail && existingByPhone && existingByEmail.id !== existingByPhone.id) {
+      conflict('Email is already registered');
+    }
+
+    const existing = existingByEmail || existingByPhone;
+    if (existing) {
+      const duplicateMessage = existingByEmail ? 'Email is already registered' : 'Phone number is already registered';
+      if (existing.role !== UserRole.BIDDER || existing.emailVerified || existing.phoneVerified) conflict(duplicateMessage);
+    }
+
+    const user = existing
+      ? await tx.user.update({
+          where: { id: existing.id },
+          data: {
+            name: data.name,
+            email,
+            phone,
+            passwordHash,
+            isActive: true,
+            company: {
+              upsert: {
+                create: { companyName: data.company.companyName, contactEmail: email, contactPhone: phone },
+                update: { companyName: data.company.companyName, contactEmail: email, contactPhone: phone }
+              }
+            }
+          },
+          select: userSelect
+        })
+      : await tx.user.create({
+          data: {
+            name: data.name,
+            email,
+            phone,
+            passwordHash,
+            role: UserRole.BIDDER,
+            company: { create: { companyName: data.company.companyName, contactEmail: email, contactPhone: phone } }
+          },
+          select: userSelect
+        });
+
+    await sendEmailOTPForUser(tx, user.id, email);
+    return user;
+  }, { maxWait: 10000, timeout: 30000 });
   return publicUser(user);
 }
 
