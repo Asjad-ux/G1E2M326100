@@ -4,7 +4,11 @@ import { AppError } from '../utils/errors.js';
 type ResendFailure = {
   message?: unknown;
   name?: unknown;
+  code?: unknown;
+  error?: ResendFailure;
 };
+
+const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 
 function recipientDomain(email: string) {
   return email.split('@')[1]?.toLowerCase() || 'unknown';
@@ -19,22 +23,25 @@ function safeProviderMessage(message: string) {
 
 function resendFailure(email: string, status: number, failure: unknown) {
   const detail = (failure && typeof failure === 'object' ? failure : {}) as ResendFailure;
-  const errorName = typeof detail.name === 'string' ? detail.name : 'ResendError';
-  const errorMessage = typeof detail.message === 'string' ? detail.message : 'Unknown provider error';
+  const providerError = detail.error && typeof detail.error === 'object' ? detail.error : detail;
+  const errorName = typeof providerError.name === 'string' ? providerError.name : 'ResendError';
+  const errorCode = typeof providerError.code === 'string' ? providerError.code : 'unavailable';
+  const errorMessage = typeof providerError.message === 'string' ? providerError.message : 'Unknown provider error';
 
-  console.error('[EMAIL] Resend request failed:', {
-    status,
-    name: errorName,
-    recipientDomain: recipientDomain(email),
-    message: safeProviderMessage(errorMessage),
-  });
+  console.error('[EMAIL] Resend failed');
+  console.error('[EMAIL] Status:', status);
+  console.error('[EMAIL] Name:', errorName);
+  console.error('[EMAIL] Code:', errorCode);
+  console.error('[EMAIL] Message:', safeProviderMessage(errorMessage));
+  console.error('[EMAIL] Recipient domain:', recipientDomain(email));
 
   return new AppError(502, 'Resend email delivery failed. Check RESEND_API_KEY and RESEND_FROM_EMAIL.');
 }
 
 export async function sendEmailVerificationCode(email: string, code: string) {
   console.log('[EMAIL] Provider: Resend');
-  console.log('[EMAIL] Sending verification email', { recipientDomain: recipientDomain(email) });
+  console.log('[EMAIL] From:', env.resendFromEmail || '[not configured]');
+  console.log('[EMAIL] Recipient:', email);
 
   if (!env.resendApiKey || !env.resendFromEmail) {
     console.error('[EMAIL] Resend request failed: provider is not configured');
@@ -43,7 +50,8 @@ export async function sendEmailVerificationCode(email: string, code: string) {
 
   let response: Response;
   try {
-    response = await fetch('https://api.resend.com/emails', {
+    console.log('[EMAIL] Request: POST', RESEND_ENDPOINT);
+    response = await fetch(RESEND_ENDPOINT, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${env.resendApiKey}`,
@@ -57,12 +65,22 @@ export async function sendEmailVerificationCode(email: string, code: string) {
       }),
     });
   } catch {
-    console.error('[EMAIL] Resend request failed: network error');
+    console.error('[EMAIL] Resend failed');
+    console.error('[EMAIL] Status: network_error');
+    console.error('[EMAIL] Name: unavailable');
+    console.error('[EMAIL] Code: unavailable');
+    console.error('[EMAIL] Message: network request failed before an API response was received');
     throw new AppError(502, 'Resend email delivery request failed. Please try again later.');
   }
 
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
+    const rawBody = await response.text();
+    let body: unknown = {};
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      body = { message: rawBody || response.statusText };
+    }
     throw resendFailure(email, response.status, body);
   }
 
