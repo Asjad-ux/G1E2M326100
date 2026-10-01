@@ -114,15 +114,9 @@ export const env = {
   refreshTokenExpiresIn:
     process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
 
-  smtpHost: (process.env.SMTP_HOST || '').trim(),
+  resendApiKey: (process.env.RESEND_API_KEY || '').trim(),
 
-  smtpPort: Number(process.env.SMTP_PORT || 465),
-
-  smtpUser: (process.env.SMTP_USER || '').trim(),
-
-  smtpPass: (process.env.SMTP_PASS || '').trim(),
-
-  smtpFrom: (process.env.SMTP_FROM || '').trim(),
+  resendFromEmail: (process.env.RESEND_FROM_EMAIL || '').trim(),
 
   cloudinaryCloudName:
     (process.env.CLOUDINARY_CLOUD_NAME || '').trim(),
@@ -158,5 +152,5 @@ export const env = {
   nodeEnv:
     process.env.NODE_ENV || 'development',
 
-  emailProvider: 'gmail-smtp'
+  emailProvider: 'resend'
 };

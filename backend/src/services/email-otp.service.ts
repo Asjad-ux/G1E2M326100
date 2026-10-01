@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 import { prisma } from '../lib/prisma.js';
 import { badRequest, AppError } from '../utils/errors.js';
 import { comparePassword, hashPassword } from '../utils/password.js';
-import { sendEmailVerificationCode } from './smtp.service.js';
+import { sendEmailVerificationCode } from './resend.service.js';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_COOLDOWN_MS = 60 * 1000;
