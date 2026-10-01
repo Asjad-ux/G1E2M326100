@@ -11,14 +11,14 @@ Independent Express + TypeScript + MySQL 8 + Prisma API for the CPCL Tender Comp
 CREATE DATABASE cpcl_tender;
 ~~~
 
-3. Copy .env.example to .env, configure the MySQL URL, JWT secrets, Resend values, Cloudinary values, and the server-only OCR provider settings.
+3. Copy .env.example to .env, configure the MySQL URL, JWT secrets, Gmail SMTP values, Cloudinary values, and the server-only OCR provider settings.
 4. Install dependencies, generate Prisma Client, migrate, seed, and start:
 
 ~~~powershell
 cd backend
 npm install
 Copy-Item .env.example .env
-# configure MySQL, Resend, Cloudinary, and OCR provider credentials in .env
+# configure MySQL, Gmail SMTP, Cloudinary, and OCR provider credentials in .env
 npx prisma generate
 npx prisma migrate dev
 npm run prisma:seed
@@ -80,7 +80,7 @@ Replacement uploads the new object, updates MySQL, and then removes the old Clou
 
 ## OTP verification
 
-Phone OTP is a development-only flow and always uses 123456. Email OTP always uses the Resend HTTPS API. Codes are generated with a cryptographically secure random number, hashed before storage, expire after 10 minutes, allow at most five failed attempts, and have a 60-second resend cooldown. The plaintext code is never stored or logged. If Resend is not configured, the email send endpoint returns HTTP 503.
+Phone OTP is a development-only flow and always uses 123456. Email OTP uses Gmail SMTP through Nodemailer on port 465 with TLS. Codes are generated with a cryptographically secure random number, hashed before storage, expire after 10 minutes, allow at most five failed attempts, and have a 60-second resend cooldown. The plaintext code is never stored or logged. If SMTP is not configured, the email send endpoint returns HTTP 503.
 
 ## Seed credentials
 
@@ -108,7 +108,7 @@ Import CPCL-Backend.postman_collection.json. Set baseUrl to http://localhost:500
 cd backend
 npm install
 Copy-Item .env.example .env
-# configure MySQL credentials, Resend values, Cloudinary credentials, and OCR provider credentials
+# configure MySQL credentials, Gmail SMTP values, Cloudinary credentials, and OCR provider credentials
 npx prisma generate
 npx prisma migrate dev
 npm run prisma:seed

@@ -10,9 +10,12 @@ const server=app.listen(env.port,()=>{
   console.log(`dotenv env path: ${envDiagnostics.envFilePath}`);
   console.log(`dotenv env exists: ${envDiagnostics.envFileExists}`);
   console.log(`dotenv parsed backend/.env: ${envDiagnostics.dotenvParsedFile}`);
-  console.log(`[EMAIL] Provider: ${env.emailProvider === 'resend' ? 'Resend' : env.emailProvider}`);
-  console.log(`[EMAIL] RESEND_API_KEY configured: ${Boolean(env.resendApiKey)}`);
-  console.log(`[EMAIL] RESEND_FROM_EMAIL configured: ${Boolean(env.resendFromEmail)}`);
+  console.log('[EMAIL] Provider: Gmail SMTP');
+  console.log(`[EMAIL] SMTP_HOST configured: ${Boolean(env.smtpHost)}`);
+  console.log(`[EMAIL] SMTP_PORT configured: ${Boolean(env.smtpPort)}`);
+  console.log(`[EMAIL] SMTP_USER configured: ${Boolean(env.smtpUser)}`);
+  console.log(`[EMAIL] SMTP_PASS configured: ${Boolean(env.smtpPass)}`);
+  console.log(`[EMAIL] SMTP_FROM configured: ${Boolean(env.smtpFrom)}`);
   console.log(`CLOUDINARY_CLOUD_NAME configured: ${Boolean(env.cloudinaryCloudName)}`);
   console.log(`CLOUDINARY_API_KEY configured: ${Boolean(env.cloudinaryApiKey)}`);
   console.log(`CLOUDINARY_API_SECRET configured: ${Boolean(env.cloudinaryApiSecret)}`);
