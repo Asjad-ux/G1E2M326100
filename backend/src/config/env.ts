@@ -124,6 +124,10 @@ export const env = {
 
   smtpFrom: (process.env.SMTP_FROM || '').trim(),
 
+  resendApiKey: (process.env.RESEND_API_KEY || '').trim(),
+
+  resendFrom: (process.env.RESEND_FROM || process.env.RESEND_FROM_EMAIL || '').trim(),
+
   cloudinaryCloudName:
     (process.env.CLOUDINARY_CLOUD_NAME || '').trim(),
 
@@ -156,5 +160,8 @@ export const env = {
     (process.env.NODE_ENV === 'production' ? 'https://cpcl-2.onrender.com' : 'http://localhost:5173'),
 
   nodeEnv:
-    process.env.NODE_ENV || 'development'
+    process.env.NODE_ENV || 'development',
+
+  emailProvider:
+    process.env.NODE_ENV === 'production' ? 'resend' : 'smtp'
 };
