@@ -13,7 +13,8 @@ import { errorHandler } from './middleware/error.js';
 import { success } from './utils/response.js';
 
 export const app=express();
-app.use(helmet()); app.use(cors({origin:env.frontendUrl,credentials:true})); app.use(express.json({limit:'1mb'})); app.use(morgan(env.nodeEnv==='production'?'combined':'dev'));
+const allowedFrontendOrigins = [env.frontendUrl, 'https://cpcl-2.onrender.com'];
+app.use(helmet()); app.use(cors({origin:allowedFrontendOrigins,credentials:true})); app.use(express.json({limit:'1mb'})); app.use(morgan(env.nodeEnv==='production'?'combined':'dev'));
 app.use('/api/auth',rateLimit({windowMs:15*60*1000,max:100,standardHeaders:true,legacyHeaders:false}),authRoutes);
 app.get('/api/health',(_req,res)=>res.json({success:true,message:'BidEazy backend is running'}));
 app.use('/api/officer',officerRoutes); app.use('/api/bidder',bidderRoutes); app.use('/api/notifications',notificationRoutes);

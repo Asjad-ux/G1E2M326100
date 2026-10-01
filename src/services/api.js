@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 const ACCESS_KEY = 'cpcl_access_token';
 const REFRESH_KEY = 'cpcl_refresh_token';
 const USER_KEY = 'cpcl_user';
@@ -20,7 +20,7 @@ async function parseResponse(response) {
 let refreshing = null;
 async function refreshAccessToken() {
   if (!authStorage.refreshToken) return false;
-  if (!refreshing) refreshing = fetch(`${API_BASE}/api/auth/refresh`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: authStorage.refreshToken }) }).then(parseResponse).then(body => { authStorage.save(body.data); return true; }).catch(() => { authStorage.clear(); return false; }).finally(() => { refreshing = null; });
+  if (!refreshing) refreshing = fetch(`${API_BASE_URL}/api/auth/refresh`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: authStorage.refreshToken }) }).then(parseResponse).then(body => { authStorage.save(body.data); return true; }).catch(() => { authStorage.clear(); return false; }).finally(() => { refreshing = null; });
   return refreshing;
 }
 
@@ -28,8 +28,8 @@ export async function request(path, options = {}, retry = true) {
   const headers = new Headers(options.headers || {});
   if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   if (authStorage.accessToken) headers.set('Authorization', `Bearer ${authStorage.accessToken}`);
-  let response = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  if (response.status === 401 && retry && await refreshAccessToken()) { const retryHeaders = new Headers(options.headers || {}); if (options.body && !(options.body instanceof FormData) && !retryHeaders.has('Content-Type')) retryHeaders.set('Content-Type', 'application/json'); if (authStorage.accessToken) retryHeaders.set('Authorization', `Bearer ${authStorage.accessToken}`); response = await fetch(`${API_BASE}${path}`, { ...options, headers: retryHeaders }); }
+  let response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  if (response.status === 401 && retry && await refreshAccessToken()) { const retryHeaders = new Headers(options.headers || {}); if (options.body && !(options.body instanceof FormData) && !retryHeaders.has('Content-Type')) retryHeaders.set('Content-Type', 'application/json'); if (authStorage.accessToken) retryHeaders.set('Authorization', `Bearer ${authStorage.accessToken}`); response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers: retryHeaders }); }
   if (response.status === 401 && retry) window.dispatchEvent(new CustomEvent('cpcl:auth-expired'));
   return parseResponse(response);
 }

@@ -1,8 +1,8 @@
 (function () {
   const configuredBase = typeof window.CPCL_API_URL === 'string' ? window.CPCL_API_URL.trim() : '';
-  const BASE = configuredBase && !configuredBase.startsWith('%VITE_')
+  const API_BASE_URL = configuredBase && !configuredBase.startsWith('%VITE_')
     ? configuredBase.replace(/\/+$/, '')
-    : 'http://localhost:5000';
+    : '';
   const ACCESS = 'cpcl_access_token';
   const REFRESH = 'cpcl_refresh_token';
   const USER = 'cpcl_user';
@@ -15,7 +15,7 @@
     if (!refreshing) refreshing = (async () => {
       const headers = new Headers({ 'Content-Type': 'application/json' });
       try {
-        const response = await fetch(BASE + '/api/auth/refresh', { method: 'POST', headers, body: JSON.stringify({ refreshToken: store.refresh }) });
+        const response = await fetch(API_BASE_URL + '/api/auth/refresh', { method: 'POST', headers, body: JSON.stringify({ refreshToken: store.refresh }) });
         logHttp('/api/auth/refresh', 'POST', response, headers, 'refresh');
         if (!response.ok) { const authFailure = response.status === 401 || response.status === 403; if (authFailure) store.clear(); return { ok: false, authFailure }; }
         const body = await parse(response); store.save(body.data); return { ok: true, authFailure: false };
@@ -23,16 +23,16 @@
     })().finally(() => { refreshing = null; });
     return refreshing;
   }
-  async function request(path, options, retry) { options = options || {}; retry = retry !== false; const method = options.method || 'GET'; const headers = new Headers(options.headers || {}); const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData; if (options.body && !isFormData && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json'); if (store.access) headers.set('Authorization', 'Bearer ' + store.access); let response = await fetch(BASE + path, Object.assign({}, options, { headers })); logHttp(path, method, response, headers, 'initial'); if (response.status === 401 && retry) { const refreshed = await refresh(); if (refreshed.ok) { headers.set('Authorization', 'Bearer ' + store.access); response = await fetch(BASE + path, Object.assign({}, options, { headers })); logHttp(path, method, response, headers, 'retry'); } else if (refreshed.authFailure) window.dispatchEvent(new CustomEvent('cpcl:auth-expired')); } return parse(response); }
+  async function request(path, options, retry) { options = options || {}; retry = retry !== false; const method = options.method || 'GET'; const headers = new Headers(options.headers || {}); const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData; if (options.body && !isFormData && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json'); if (store.access) headers.set('Authorization', 'Bearer ' + store.access); let response = await fetch(API_BASE_URL + path, Object.assign({}, options, { headers })); logHttp(path, method, response, headers, 'initial'); if (response.status === 401 && retry) { const refreshed = await refresh(); if (refreshed.ok) { headers.set('Authorization', 'Bearer ' + store.access); response = await fetch(API_BASE_URL + path, Object.assign({}, options, { headers })); logHttp(path, method, response, headers, 'retry'); } else if (refreshed.authFailure) window.dispatchEvent(new CustomEvent('cpcl:auth-expired')); } return parse(response); }
   async function requestBlob(path, retry) {
     retry = retry !== false;
     const headers = new Headers();
     if (store.access) headers.set('Authorization', 'Bearer ' + store.access);
-    let response = await fetch(BASE + path, { headers, redirect: 'manual' });
+    let response = await fetch(API_BASE_URL + path, { headers, redirect: 'manual' });
     logHttp(path, 'GET', response, headers, 'document-endpoint');
     if (response.status === 401 && retry) {
       const refreshed = await refresh();
-      if (refreshed.ok) { headers.set('Authorization', 'Bearer ' + store.access); response = await fetch(BASE + path, { headers, redirect: 'manual' }); logHttp(path, 'GET', response, headers, 'document-retry'); }
+      if (refreshed.ok) { headers.set('Authorization', 'Bearer ' + store.access); response = await fetch(API_BASE_URL + path, { headers, redirect: 'manual' }); logHttp(path, 'GET', response, headers, 'document-retry'); }
       else if (refreshed.authFailure) window.dispatchEvent(new CustomEvent('cpcl:auth-expired'));
     }
     let deliveryResponse = response;
