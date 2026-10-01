@@ -10,16 +10,9 @@ const server=app.listen(env.port,()=>{
   console.log(`dotenv env path: ${envDiagnostics.envFilePath}`);
   console.log(`dotenv env exists: ${envDiagnostics.envFileExists}`);
   console.log(`dotenv parsed backend/.env: ${envDiagnostics.dotenvParsedFile}`);
-  console.log(`Email provider: ${env.emailProvider}`);
-  if (env.emailProvider === 'resend') {
-    console.log(`RESEND_API_KEY configured: ${Boolean(env.resendApiKey)}`);
-    console.log(`RESEND_FROM configured: ${Boolean(env.resendFrom)}`);
-  } else {
-    console.log(`SMTP_HOST configured: ${Boolean(env.smtpHost)}`);
-    console.log(`SMTP_USER configured: ${Boolean(env.smtpUser)}`);
-    console.log(`SMTP_PASS configured: ${Boolean(env.smtpPass)}`);
-    console.log(`SMTP_FROM configured: ${Boolean(env.smtpFrom)}`);
-  }
+  console.log(`[EMAIL] Provider: ${env.emailProvider === 'resend' ? 'Resend' : env.emailProvider}`);
+  console.log(`[EMAIL] RESEND_API_KEY configured: ${Boolean(env.resendApiKey)}`);
+  console.log(`[EMAIL] RESEND_FROM_EMAIL configured: ${Boolean(env.resendFromEmail)}`);
   console.log(`CLOUDINARY_CLOUD_NAME configured: ${Boolean(env.cloudinaryCloudName)}`);
   console.log(`CLOUDINARY_API_KEY configured: ${Boolean(env.cloudinaryApiKey)}`);
   console.log(`CLOUDINARY_API_SECRET configured: ${Boolean(env.cloudinaryApiSecret)}`);
