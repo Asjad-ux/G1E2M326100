@@ -49,7 +49,56 @@ function apiError(error, fallback = 'The server is unavailable. Please try again
 }
 function normalizeTender(t) { return { ...t, displayId: t.tenderNumber || t.id, id: t.id, category: t.category, start: t.startDate ? String(t.startDate).slice(0, 10) : '', closing: t.closingDate ? String(t.closingDate).slice(0, 10) : '', requirements: (t.requirements || []).map(r => typeof r === 'string' ? r : r.name), backendRequirements: (t.requirements || []).filter(r => typeof r !== 'string'), documents: t.documents || t.tenderDocuments || [], applications: t._count?.applications || 0 }; }
 function normalizeApplication(a) { return { ...a, bidderId: a.company?.userId, bidder: a.company?.companyName || 'Unknown company', submitted: a.submittedAt ? String(a.submittedAt).slice(0, 10) : '', compliance: a.complianceScore || 0, status: a.status || 'UNDER_REVIEW', reason: a.rejectionReason || '', documents: a.documents || [], documentNames: (a.documents || []).map(x => x.document?.documentType || x.document?.fileName || x.fileName || x.documentId) }; }
-async function loadBackendData() { if (!window.CPCLApi?.store.access || !state.session) return; try { const role = state.session.role; const user = window.CPCLApi.store.user; if (user) { if (role === 'officer') state.officer = { ...state.officer, ...user, id: user.id, role: 'officer', name: user.name, email: user.email }; else { const company = user.company || {}; const bidderRecord = { ...user, id: user.id, role: 'bidder', company: company.companyName || 'Bidder company', email: user.email, status: company.status || 'ACTIVE', reason: company.blacklistReason || '' }; state.bidders = [bidderRecord, ...state.bidders.filter(b => b.id !== user.id)]; state.documents[user.id] = state.documents[user.id] || []; } } const tenderResponse = role === 'officer' ? await window.CPCLApi.officer.tenders() : await window.CPCLApi.bidder.tenders(); state.tenders = (tenderResponse.data || []).map(normalizeTender); if (role === 'officer') { const apps = []; for (const t of state.tenders) { const response = await window.CPCLApi.officer.applications(t.id).catch(() => ({ data: [] })); apps.push(...(response.data || []).map(normalizeApplication)); } state.applications = apps; } else { const response = await window.CPCLApi.bidder.applications(); state.applications = (response.data || []).map(normalizeApplication); const docs = await window.CPCLApi.bidder.documents(); state.documentRecords = state.documentRecords || {}; state.documentRecords[state.session.id] = docs.data || []; state.documents[state.session.id] = (docs.data || []).map(d => d.fileName || d.documentType); } const notifications = await window.CPCLApi.notifications.list().catch(() => ({ data: [] })); state.notifications = notifications.data || []; save(); } catch (error) { console.error('CPCL backend load failed', error); toast(apiError(error, 'Unable to load live backend data.'), 'error'); } }
+let backendDataLoadPromise = null;
+function loadBackendData() {
+  if (!window.CPCLApi?.store.access || !state.session) return Promise.resolve();
+  if (backendDataLoadPromise) return backendDataLoadPromise;
+  backendDataLoadPromise = (async () => {
+    try {
+      const role = state.session.role;
+      const user = window.CPCLApi.store.user;
+      if (user) {
+        if (role === 'officer') state.officer = { ...state.officer, ...user, id: user.id, role: 'officer', name: user.name, email: user.email };
+        else {
+          const company = user.company || {};
+          const bidderRecord = { ...user, id: user.id, role: 'bidder', company: company.companyName || 'Bidder company', email: user.email, status: company.status || 'ACTIVE', reason: company.blacklistReason || '' };
+          state.bidders = [bidderRecord, ...state.bidders.filter(b => b.id !== user.id)];
+          state.documents[user.id] = state.documents[user.id] || [];
+        }
+      }
+
+      if (role === 'officer') {
+        const tenderResponse = await window.CPCLApi.officer.tenders();
+        state.tenders = (tenderResponse.data || []).map(normalizeTender);
+        const notificationsPromise = window.CPCLApi.notifications.list().catch(() => ({ data: [] }));
+        const [applicationResponses, notifications] = await Promise.all([
+          Promise.all(state.tenders.map(t => window.CPCLApi.officer.applications(t.id).catch(() => ({ data: [] })))),
+          notificationsPromise,
+        ]);
+        state.applications = applicationResponses.flatMap(response => (response.data || []).map(normalizeApplication));
+        state.notifications = notifications.data || [];
+      } else {
+        const [tenderResponse, applicationResponse, docs, notifications] = await Promise.all([
+          window.CPCLApi.bidder.tenders(),
+          window.CPCLApi.bidder.applications(),
+          window.CPCLApi.bidder.documents(),
+          window.CPCLApi.notifications.list().catch(() => ({ data: [] })),
+        ]);
+        state.tenders = (tenderResponse.data || []).map(normalizeTender);
+        state.applications = (applicationResponse.data || []).map(normalizeApplication);
+        state.documentRecords = state.documentRecords || {};
+        state.documentRecords[state.session.id] = docs.data || [];
+        state.documents[state.session.id] = (docs.data || []).map(d => d.fileName || d.documentType);
+        state.notifications = notifications.data || [];
+      }
+      save();
+    } catch (error) {
+      console.error('CPCL backend load failed', error);
+      toast(apiError(error, 'Unable to load live backend data.'), 'error');
+    }
+  })().finally(() => { backendDataLoadPromise = null; });
+  return backendDataLoadPromise;
+}
 function pageFromPath(path, role = state.session?.role) { const cleanPath = String(path || '').replace(/\/+$/, '') || '/'; if (role === 'officer') return ({ '/officer/dashboard': 'officer-dashboard', '/officer/tenders': 'officer-tenders', '/officer/applications': 'officer-applications', '/officer/profile': 'profile', '/dashboard': 'officer-dashboard' })[cleanPath] || null; return ({ '/dashboard': 'bidder-dashboard', '/documents': 'bidder-documents', '/tenders': 'bidder-tenders', '/applications': 'bidder-applications', '/profile': 'profile' })[cleanPath] || null; }
 function pathForPage(page, role = state.session?.role) { if (role === 'officer') return ({ 'officer-dashboard': '/officer/dashboard', 'officer-tenders': '/officer/tenders', 'officer-applications': '/officer/applications', profile: '/officer/profile' })[page] || null; return ({ 'bidder-dashboard': '/dashboard', 'bidder-documents': '/documents', 'bidder-tenders': '/tenders', 'bidder-applications': '/applications', profile: '/profile' })[page] || null; }
 function syncPageUrl() { const protectedPath = /^\/(documents|tenders|applications|profile|dashboard)(\/|$)/.test(window.location.pathname) || /^\/officer\//.test(window.location.pathname); if (!state.session) { if (protectedPath) window.history.replaceState({}, '', '/'); return; } const nextPath = pathForPage(view.page); if (nextPath && window.location.pathname !== nextPath) window.history.replaceState({}, '', nextPath); }
@@ -217,7 +266,7 @@ function bind() {
   const availableCat=document.querySelector('#available-category'); if(availableCat) availableCat.addEventListener('change',()=>filterAvailable(available.value,availableCat.value));
   const bidSearch=document.querySelector('#bid-search'); if(bidSearch) bidSearch.addEventListener('input',()=>filterBids(bidSearch.value,document.querySelector('#bid-filter').value));
   const bidFilter=document.querySelector('#bid-filter'); if(bidFilter) bidFilter.addEventListener('change',()=>filterBids(bidSearch.value,bidFilter.value));
-  const liveSubmit=document.querySelector('#submit-bid'); if(liveSubmit) liveSubmit.addEventListener('click',async e=>{e.preventDefault();e.stopImmediatePropagation();try{const t=tender(view.tenderId),records=state.documentRecords?.[currentUser().id]||[],documents=(t.backendRequirements||[]).map(req=>{const match=records.find(doc=>String(doc.documentType||'').toLowerCase().includes(String(req.name||'').toLowerCase())||String(doc.fileName||'').toLowerCase().includes(String(req.name||'').toLowerCase()));return match?{documentId:match.id,requirementId:req.id}:null;}).filter(Boolean);const response=await window.CPCLApi.bidder.apply(view.tenderId,documents);await loadBackendData();view.applicationId=response.data.id;view.page='bidder-application';render();toast('Bid submitted successfully');}catch(error){toast(apiError(error,'Unable to submit bid.'),'error');}},true);
+  const liveSubmit=document.querySelector('#submit-bid'); if(liveSubmit) liveSubmit.addEventListener('click',async e=>{e.preventDefault();e.stopImmediatePropagation();if(window.__cpclBidSubmitInFlight)return;window.__cpclBidSubmitInFlight=true;try{const t=tender(view.tenderId),records=state.documentRecords?.[currentUser().id]||[],documents=(t.backendRequirements||[]).map(req=>{const match=records.find(doc=>String(doc.documentType||'').toLowerCase().includes(String(req.name||'').toLowerCase())||String(doc.fileName||'').toLowerCase().includes(String(req.name||'').toLowerCase()));return match?{documentId:match.id,requirementId:req.id}:null;}).filter(Boolean);const response=await window.CPCLApi.bidder.apply(view.tenderId,documents);await loadBackendData();view.applicationId=response.data.id;view.page='bidder-application';render();toast('Bid submitted successfully');}catch(error){toast(apiError(error,'Unable to submit bid.'),'error');}finally{window.__cpclBidSubmitInFlight=false;}},true);
   const submit=document.querySelector('#submit-bid'); if(submit) submit.addEventListener('click',()=>{ const a={id:'BID-'+String(state.applications.length+1).padStart(3,'0'),tenderId:view.tenderId,bidderId:currentUser().id,compliance:100,status:'UNDER_REVIEW',submitted:'2026-09-21',documents:state.documents[currentUser().id],reason:''}; showModal('Submit your bid?', '<p>Submit your bid for this tender? Once confirmed, the application will be sent to the BidEazy review queue.</p>', '<button class="btn btn-outline" data-action="close-modal">Cancel</button><button class="btn btn-primary" data-action="confirm-submit">Confirm submission</button>'); window.pendingApplication=a; });
 }
 function authPage() {
@@ -240,6 +289,8 @@ function bindEditableLogin() {
     if (!form) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (window.__cpclLoginInFlight) return;
+    window.__cpclLoginInFlight = true;
     const email = form.querySelector('#login-email')?.value.trim().toLowerCase();
     let password = form.querySelector('#login-password')?.value || '';
     if (password === 'demo1234') password = 'DemoPassword123!';
@@ -257,6 +308,8 @@ function bindEditableLogin() {
         target.textContent = error?.status === 401 ? (error.message || 'Invalid email or password.') : apiError(error, 'Unable to sign in.');
         target.classList.remove('hidden');
       }
+    } finally {
+      window.__cpclLoginInFlight = false;
     }
   }, true);
   window.__cpclEditableLoginBound = true;

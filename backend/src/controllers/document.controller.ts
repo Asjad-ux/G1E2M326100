@@ -3,6 +3,8 @@ import * as service from '../services/document.service.js';
 import { getDeliveryUrl } from '../services/cloudinary.service.js';
 import { notFound } from '../utils/errors.js';
 import { success, message } from '../utils/response.js';
+import { fetchWithTimeout } from '../utils/external-request.js';
+import { env } from '../config/env.js';
 
 export const create = async (req: Request, res: Response) => success(res, await service.createDocument(req.auth!.userId, String(req.body.documentType), req.file, false, req.body.documentName), 201);
 export const list = async (req: Request, res: Response) => success(res, await service.listDocuments(req.auth!.userId));
@@ -17,7 +19,7 @@ export const attach = async (req: Request, res: Response) => success(res, await 
 async function streamFromCloudinary(res: Response, document: Awaited<ReturnType<typeof service.getDocument>>, download: boolean) {
   if (!document.cloudinaryPublicId || !document.cloudinaryUrl) return notFound('Document is not connected to Cloudinary');
   const url = getDeliveryUrl(document.cloudinaryPublicId, document.cloudinaryResourceType || 'raw', download);
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url, {}, env.cloudinaryTimeoutMs, 'Cloudinary document delivery');
   if (!response.ok) {
     const body = await response.json().catch(() => ({})) as { error?: { message?: string }; message?: string };
     const message = body.error?.message || body.message || `Cloudinary document delivery failed with HTTP ${response.status}`;

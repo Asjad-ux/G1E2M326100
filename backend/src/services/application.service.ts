@@ -10,18 +10,21 @@ async function bidderCompany(userId: string) {
 }
 
 export async function submitApplication(userId: string, tenderId: string, documents: { documentId: string; requirementId?: string }[] = []) {
-  const company = await bidderCompany(userId);
+  const [company, tender] = await Promise.all([
+    bidderCompany(userId),
+    prisma.tender.findUnique({ where: { id: tenderId }, include: { requirements: true } }),
+  ]);
   if (company.status === CompanyStatus.BLACKLISTED) return forbidden('Your bidder company is blacklisted and cannot submit applications');
-  const tender = await prisma.tender.findUnique({ where: { id: tenderId }, include: { requirements: true } });
   if (!tender) return notFound('Tender not found');
   if (tender.status !== TenderStatus.ACTIVE) return badRequest('Only active tenders accept applications');
   if (tender.closingDate < new Date()) return badRequest('Tender closing date has passed');
-  const existing = await prisma.application.findUnique({ where: { tenderId_companyId: { tenderId, companyId: company.id } } });
-  if (existing) return conflict('Your company has already applied to this tender');
-
   const distinctDocumentIds = new Set(documents.map(document => document.documentId));
   if (distinctDocumentIds.size !== documents.length) return badRequest('A document cannot be attached more than once');
-  const vaultDocuments = await prisma.document.findMany({ where: { id: { in: [...distinctDocumentIds] }, companyId: company.id } });
+  const [existing, vaultDocuments] = await Promise.all([
+    prisma.application.findUnique({ where: { tenderId_companyId: { tenderId, companyId: company.id } } }),
+    prisma.document.findMany({ where: { id: { in: [...distinctDocumentIds] }, companyId: company.id } }),
+  ]);
+  if (existing) return conflict('Your company has already applied to this tender');
   if (vaultDocuments.length !== distinctDocumentIds.size) return notFound('One or more selected documents were not found in your Document Vault');
   const requirementsById = new Map(tender.requirements.map(requirement => [requirement.id, requirement]));
   for (const document of documents) if (document.requirementId && !requirementsById.has(document.requirementId)) return badRequest('A selected document is linked to a requirement from another tender');
@@ -31,9 +34,14 @@ export async function submitApplication(userId: string, tenderId: string, docume
 
   const application = await prisma.application.create({ data: { tenderId, companyId: company.id, documents: { create: documents.map(document => ({ documentId: document.documentId, requirementId: document.requirementId })) } }, include: { tender: true, company: true } });
   await calculateCompliance(application.id);
-  const officers = await prisma.user.findMany({ where: { role: 'OFFICER' } });
-  if (officers.length) await prisma.notification.createMany({ data: officers.map(officer => ({ userId: officer.id, title: 'New bid received', message: `${company.companyName} submitted a bid for ${tender.tenderNumber}`, type: NotificationType.NEW_BID })) });
-  return prisma.application.findUnique({ where: { id: application.id }, include: { documents: { include: { document: true, requirement: true } }, complianceResults: true, tender: true, company: true } });
+  const notificationPromise = prisma.user.findMany({ where: { role: 'OFFICER' } }).then(officers => officers.length
+    ? prisma.notification.createMany({ data: officers.map(officer => ({ userId: officer.id, title: 'New bid received', message: `${company.companyName} submitted a bid for ${tender.tenderNumber}`, type: NotificationType.NEW_BID })) })
+    : undefined);
+  const [result] = await Promise.all([
+    prisma.application.findUnique({ where: { id: application.id }, include: { documents: { include: { document: true, requirement: true } }, complianceResults: true, tender: true, company: true } }),
+    notificationPromise,
+  ]);
+  return result;
 }
 
 export async function listBidderApplications(userId: string) { const company = await bidderCompany(userId); return prisma.application.findMany({ where: { companyId: company.id }, include: { company: true, tender: { include: { requirements: true, documents: true } }, complianceResults: true, documents: { include: { document: true, requirement: true } } }, orderBy: { createdAt: 'desc' } }); }
@@ -48,16 +56,18 @@ export async function updateApplicationStatus(id: string, officerUserId: string,
   if (!app) return notFound('Application not found');
   if (app.status !== ApplicationStatus.UNDER_REVIEW) return conflict(`Application is already ${app.status}`);
 
-  const updated = await prisma.application.update({ where: { id }, data: { status, rejectionReason: status === ApplicationStatus.REJECTED ? reason : null } });
   const accepted = status === ApplicationStatus.ACCEPTED;
-  await prisma.notification.create({
-    data: {
-      userId: app.company.userId,
-      title: accepted ? 'Application accepted' : 'Application rejected',
-      message: accepted ? `Your bid for ${app.tender.title} has been accepted.` : `Your bid for ${app.tender.title} has been rejected.${reason ? ` Reason: ${reason}` : ''}`,
-      type: accepted ? NotificationType.APPLICATION_ACCEPTED : NotificationType.APPLICATION_REJECTED,
-    },
-  });
+  const [updated] = await Promise.all([
+    prisma.application.update({ where: { id }, data: { status, rejectionReason: status === ApplicationStatus.REJECTED ? reason : null } }),
+    prisma.notification.create({
+      data: {
+        userId: app.company.userId,
+        title: accepted ? 'Application accepted' : 'Application rejected',
+        message: accepted ? `Your bid for ${app.tender.title} has been accepted.` : `Your bid for ${app.tender.title} has been rejected.${reason ? ` Reason: ${reason}` : ''}`,
+        type: accepted ? NotificationType.APPLICATION_ACCEPTED : NotificationType.APPLICATION_REJECTED,
+      },
+    }),
+  ]);
   return updated;
 }
 

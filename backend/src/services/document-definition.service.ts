@@ -29,6 +29,7 @@ const definitionsDirectory = existsSync(sourceDefinitionsDirectory)
   : resolve(dirname(fileURLToPath(import.meta.url)), '../../../document-definitions');
 const fieldKeyPattern = /^[A-Za-z][A-Za-z0-9_]*$/;
 const supportedFieldTypes = new Set(['string', 'number', 'date', 'boolean']);
+let cachedDefinitions: DocumentDefinition[] | null = null;
 
 function validDefinition(value: unknown): value is DocumentDefinition {
   if (!value || typeof value !== 'object') return false;
@@ -56,6 +57,7 @@ function validDefinition(value: unknown): value is DocumentDefinition {
 }
 
 export function getAllDocumentDefinitions(): DocumentDefinition[] {
+  if (cachedDefinitions) return cachedDefinitions;
   if (!existsSync(definitionsDirectory)) return [];
   const definitions: DocumentDefinition[] = [];
   for (const fileName of readdirSync(definitionsDirectory)) {
@@ -71,7 +73,8 @@ export function getAllDocumentDefinitions(): DocumentDefinition[] {
       console.warn(`Ignoring malformed document definition: ${fileName}`);
     }
   }
-  return definitions.sort((a, b) => a.documentName.localeCompare(b.documentName));
+  cachedDefinitions = definitions.sort((a, b) => a.documentName.localeCompare(b.documentName));
+  return cachedDefinitions;
 }
 
 export function getActiveDocumentDefinitions() {

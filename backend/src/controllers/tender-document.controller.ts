@@ -2,6 +2,8 @@ import type { Request, Response } from 'express';
 import { getDeliveryUrl } from '../services/cloudinary.service.js';
 import * as service from '../services/tender-document.service.js';
 import { message, success } from '../utils/response.js';
+import { fetchWithTimeout } from '../utils/external-request.js';
+import { env } from '../config/env.js';
 
 export const create = async (req: Request, res: Response) => success(res, await service.createTenderDocument(req.auth!.userId, String(req.params.tenderId), req.file), 201);
 export const officerList = async (req: Request, res: Response) => success(res, await service.listOfficerTenderDocuments(req.auth!.userId, String(req.params.tenderId)));
@@ -9,7 +11,7 @@ export const bidderList = async (req: Request, res: Response) => success(res, aw
 
 async function stream(res: Response, document: { cloudinaryPublicId: string | null; cloudinaryUrl: string | null; cloudinaryResourceType: string | null; originalFileName?: string | null; fileName: string; mimeType?: string | null }, download: boolean) {
   if (!document.cloudinaryPublicId || !document.cloudinaryUrl) return res.status(404).json({ success: false, message: 'Tender document is not connected to Cloudinary', errors: [] });
-  const response = await fetch(getDeliveryUrl(document.cloudinaryPublicId, document.cloudinaryResourceType || 'raw', download));
+  const response = await fetchWithTimeout(getDeliveryUrl(document.cloudinaryPublicId, document.cloudinaryResourceType || 'raw', download), {}, env.cloudinaryTimeoutMs, 'Cloudinary document delivery');
   if (!response.ok) {
     const body = await response.json().catch(() => ({})) as { error?: { message?: string }; message?: string };
     const message = body.error?.message || body.message || `Cloudinary document delivery failed with HTTP ${response.status}`;

@@ -6,8 +6,28 @@
   const ACCESS = 'cpcl_access_token';
   const REFRESH = 'cpcl_refresh_token';
   const USER = 'cpcl_user';
+  const API_TIMEOUT_MS = 30000;
+  const UPLOAD_TIMEOUT_MS = 120000;
+  const DOCUMENT_TIMEOUT_MS = 60000;
   const store = { get access() { return localStorage.getItem(ACCESS); }, get refresh() { return localStorage.getItem(REFRESH); }, get user() { try { return JSON.parse(localStorage.getItem(USER) || 'null'); } catch { return null; } }, save(data) { localStorage.setItem(ACCESS, data.accessToken); localStorage.setItem(REFRESH, data.refreshToken); localStorage.setItem(USER, JSON.stringify(data.user)); }, clear() { localStorage.removeItem(ACCESS); localStorage.removeItem(REFRESH); localStorage.removeItem(USER); } };
-  function logHttp(path, method, response, headers, phase) { console.info(`[CPCL API] ${method} ${path} -> HTTP ${response.status}`, { authorizationAttached: headers.has('Authorization'), accessTokenExists: Boolean(store.access), phase }); }
+  function logHttp(path, method, response, headers, phase) { if (window.CPCL_DEBUG_API) console.info(`[CPCL API] ${method} ${path} -> HTTP ${response.status}`, { authorizationAttached: headers.has('Authorization'), accessTokenExists: Boolean(store.access), phase }); }
+  async function fetchWithTimeout(url, options, timeoutMs) {
+    const callerSignal = options?.signal;
+    const controller = new AbortController();
+    let timer;
+    const abort = () => controller.abort(callerSignal?.reason);
+    if (callerSignal) {
+      if (callerSignal.aborted) abort();
+      else callerSignal.addEventListener('abort', abort, { once: true });
+    }
+    timer = window.setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), timeoutMs);
+    try {
+      return await fetch(url, Object.assign({}, options, { signal: controller.signal }));
+    } finally {
+      window.clearTimeout(timer);
+      callerSignal?.removeEventListener('abort', abort);
+    }
+  }
   async function parse(response) { const body = await response.json().catch(() => ({})); if (!response.ok) { const error = new Error(body.message || 'The request could not be completed.'); error.status = response.status; error.details = Array.isArray(body.errors) ? body.errors : []; throw error; } return body; }
   let refreshing = null;
   async function refresh() {
@@ -15,7 +35,7 @@
     if (!refreshing) refreshing = (async () => {
       const headers = new Headers({ 'Content-Type': 'application/json' });
       try {
-        const response = await fetch(API_BASE_URL + '/api/auth/refresh', { method: 'POST', headers, body: JSON.stringify({ refreshToken: store.refresh }) });
+        const response = await fetchWithTimeout(API_BASE_URL + '/api/auth/refresh', { method: 'POST', headers, body: JSON.stringify({ refreshToken: store.refresh }) }, API_TIMEOUT_MS);
         logHttp('/api/auth/refresh', 'POST', response, headers, 'refresh');
         if (!response.ok) { const authFailure = response.status === 401 || response.status === 403; if (authFailure) store.clear(); return { ok: false, authFailure }; }
         const body = await parse(response); store.save(body.data); return { ok: true, authFailure: false };
@@ -23,21 +43,21 @@
     })().finally(() => { refreshing = null; });
     return refreshing;
   }
-  async function request(path, options, retry) { options = options || {}; retry = retry !== false; const method = options.method || 'GET'; const headers = new Headers(options.headers || {}); const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData; if (options.body && !isFormData && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json'); if (store.access) headers.set('Authorization', 'Bearer ' + store.access); let response = await fetch(API_BASE_URL + path, Object.assign({}, options, { headers })); logHttp(path, method, response, headers, 'initial'); if (response.status === 401 && retry) { const refreshed = await refresh(); if (refreshed.ok) { headers.set('Authorization', 'Bearer ' + store.access); response = await fetch(API_BASE_URL + path, Object.assign({}, options, { headers })); logHttp(path, method, response, headers, 'retry'); } else if (refreshed.authFailure) window.dispatchEvent(new CustomEvent('cpcl:auth-expired')); } return parse(response); }
+  async function request(path, options, retry) { options = options || {}; retry = retry !== false; const method = options.method || 'GET'; const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData; const timeoutMs = options.timeoutMs || (isFormData ? UPLOAD_TIMEOUT_MS : API_TIMEOUT_MS); const headers = new Headers(options.headers || {}); if (options.body && !isFormData && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json'); if (store.access) headers.set('Authorization', 'Bearer ' + store.access); const requestOptions = Object.assign({}, options, { headers }); delete requestOptions.timeoutMs; let response = await fetchWithTimeout(API_BASE_URL + path, requestOptions, timeoutMs); logHttp(path, method, response, headers, 'initial'); if (response.status === 401 && retry) { const refreshed = await refresh(); if (refreshed.ok) { headers.set('Authorization', 'Bearer ' + store.access); response = await fetchWithTimeout(API_BASE_URL + path, requestOptions, timeoutMs); logHttp(path, method, response, headers, 'retry'); } else if (refreshed.authFailure) window.dispatchEvent(new CustomEvent('cpcl:auth-expired')); } return parse(response); }
   async function requestBlob(path, retry) {
     retry = retry !== false;
     const headers = new Headers();
     if (store.access) headers.set('Authorization', 'Bearer ' + store.access);
-    let response = await fetch(API_BASE_URL + path, { headers, redirect: 'manual' });
+    let response = await fetchWithTimeout(API_BASE_URL + path, { headers, redirect: 'manual' }, DOCUMENT_TIMEOUT_MS);
     logHttp(path, 'GET', response, headers, 'document-endpoint');
     if (response.status === 401 && retry) {
       const refreshed = await refresh();
-      if (refreshed.ok) { headers.set('Authorization', 'Bearer ' + store.access); response = await fetch(API_BASE_URL + path, { headers, redirect: 'manual' }); logHttp(path, 'GET', response, headers, 'document-retry'); }
+      if (refreshed.ok) { headers.set('Authorization', 'Bearer ' + store.access); response = await fetchWithTimeout(API_BASE_URL + path, { headers, redirect: 'manual' }, DOCUMENT_TIMEOUT_MS); logHttp(path, 'GET', response, headers, 'document-retry'); }
       else if (refreshed.authFailure) window.dispatchEvent(new CustomEvent('cpcl:auth-expired'));
     }
     let deliveryResponse = response;
     const location = response.headers.get('Location');
-    if ([301, 302, 303, 307, 308].includes(response.status) && location) { deliveryResponse = await fetch(location, { redirect: 'follow' }); logHttp(path, 'GET', deliveryResponse, new Headers(), 'cloudinary-delivery'); }
+    if ([301, 302, 303, 307, 308].includes(response.status) && location) { deliveryResponse = await fetchWithTimeout(location, { redirect: 'follow' }, DOCUMENT_TIMEOUT_MS); logHttp(path, 'GET', deliveryResponse, new Headers(), 'cloudinary-delivery'); }
     if (!deliveryResponse.ok) { const body = await deliveryResponse.json().catch(() => ({})); const error = new Error(body.message || body.error?.message || `The document could not be opened (HTTP ${deliveryResponse.status}).`); error.status = deliveryResponse.status; throw error; }
     return { blob: await deliveryResponse.blob(), fileName: deliveryResponse.headers.get('Content-Disposition') || 'document' };
   }

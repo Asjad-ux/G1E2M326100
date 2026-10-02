@@ -1,5 +1,6 @@
 import { env } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
+import { fetchWithTimeout } from '../utils/external-request.js';
 
 type ResendFailure = {
   message?: unknown;
@@ -39,10 +40,6 @@ function resendFailure(email: string, status: number, failure: unknown) {
 }
 
 export async function sendEmailVerificationCode(email: string, code: string) {
-  console.log('[EMAIL] Provider: Resend');
-  console.log('[EMAIL] From:', env.resendFromEmail || '[not configured]');
-  console.log('[EMAIL] Recipient:', email);
-
   if (!env.resendApiKey || !env.resendFromEmail) {
     console.error('[EMAIL] Resend request failed: provider is not configured');
     throw new AppError(503, 'Resend email service is not configured');
@@ -50,8 +47,7 @@ export async function sendEmailVerificationCode(email: string, code: string) {
 
   let response: Response;
   try {
-    console.log('[EMAIL] Request: POST', RESEND_ENDPOINT);
-    response = await fetch(RESEND_ENDPOINT, {
+    response = await fetchWithTimeout(RESEND_ENDPOINT, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${env.resendApiKey}`,
@@ -63,8 +59,9 @@ export async function sendEmailVerificationCode(email: string, code: string) {
         subject: 'BidEazy email verification code',
         html: `<p>Your BidEazy email verification code is:</p><p style="font-size:24px;font-weight:700;letter-spacing:4px">${code}</p><p>This code expires in 10 minutes. If you did not request it, you can ignore this email.</p>`,
       }),
-    });
-  } catch {
+    }, env.resendTimeoutMs, 'Resend email delivery');
+  } catch (error) {
+    if (error instanceof AppError) throw error;
     console.error('[EMAIL] Resend failed: network error');
     throw new AppError(502, 'Resend email delivery request failed. Please try again later.');
   }
@@ -79,9 +76,4 @@ export async function sendEmailVerificationCode(email: string, code: string) {
     }
     throw resendFailure(email, response.status, body);
   }
-
-  console.log('[EMAIL] Verification email accepted by Resend', {
-    recipientDomain: recipientDomain(email),
-    status: response.status,
-  });
 }

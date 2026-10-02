@@ -1,6 +1,7 @@
 import { v2 as cloudinary, type UploadApiResponse } from 'cloudinary';
 import { env } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
+import { fetchWithTimeout } from '../utils/external-request.js';
 
 type UploadInput = {
   userId: string;
@@ -25,16 +26,21 @@ export function cloudinaryConfigured() {
   return Boolean(env.cloudinaryCloudName && env.cloudinaryApiKey && env.cloudinaryApiSecret);
 }
 
+let configured = false;
+
 function client() {
   if (!cloudinaryConfigured()) {
     throw new AppError(503, 'Cloudinary document storage is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET in backend/.env.');
   }
 
-  cloudinary.config({
-    cloud_name: env.cloudinaryCloudName,
-    api_key: env.cloudinaryApiKey,
-    api_secret: env.cloudinaryApiSecret,
-  });
+  if (!configured) {
+    cloudinary.config({
+      cloud_name: env.cloudinaryCloudName,
+      api_key: env.cloudinaryApiKey,
+      api_secret: env.cloudinaryApiSecret,
+    });
+    configured = true;
+  }
   return cloudinary;
 }
 
@@ -145,7 +151,7 @@ export function getDeliveryUrl(publicId: string, resourceType = 'raw', download 
 /** Fetches a short-lived authorized copy into memory for downstream processing. */
 export async function downloadFile(publicId: string, resourceType = 'raw') {
   const url = getDeliveryUrl(publicId, resourceType, false);
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url, {}, env.cloudinaryTimeoutMs, 'Cloudinary document delivery');
   if (!response.ok) throw new AppError(502, `Cloudinary document delivery failed with HTTP ${response.status}`);
   return Buffer.from(await response.arrayBuffer());
 }

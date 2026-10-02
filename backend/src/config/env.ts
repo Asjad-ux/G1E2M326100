@@ -118,6 +118,8 @@ export const env = {
 
   resendFromEmail: (process.env.RESEND_FROM_EMAIL || '').trim(),
 
+  resendTimeoutMs: Number(process.env.RESEND_TIMEOUT_MS || 15000),
+
   cloudinaryCloudName:
     (process.env.CLOUDINARY_CLOUD_NAME || '').trim(),
 
@@ -126,6 +128,8 @@ export const env = {
 
   cloudinaryApiSecret:
     (process.env.CLOUDINARY_API_SECRET || '').trim(),
+
+  cloudinaryTimeoutMs: Number(process.env.CLOUDINARY_TIMEOUT_MS || 30000),
 
   paddlePythonPath: configuredBackendPath(
     process.env.PADDLEOCR_PYTHON_PATH,
