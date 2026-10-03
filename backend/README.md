@@ -63,6 +63,8 @@ ocr-worker/.venv/Scripts/python.exe -m pip install -r ocr-worker/requirements.tx
 
 The first OCR run may download the official PaddleOCR models. Keep `PADDLEOCR_PYTHON_PATH`, `PADDLEOCR_WORKER_PATH`, `PADDLEOCR_DEVICE`, and `PADDLEOCR_TIMEOUT_MS` server-side in `.env`.
 
+For the Render backend service, set the service root directory to `backend`, use `npm install && npm run build:render` as the Build Command, and use `npm run start` as the Start Command. `build:render` creates or reuses `ocr-worker/.venv`, installs `ocr-worker/requirements.txt`, verifies `import paddleocr`, runs the worker self-check, and then builds the TypeScript backend. The running backend automatically uses `ocr-worker/.venv/bin/python` on Render/Linux when `PADDLEOCR_PYTHON_PATH` is not set.
+
 ## Document API
 
 Bidder document uploads use multipart/form-data with a file field and documentType:

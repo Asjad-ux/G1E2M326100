@@ -339,6 +339,7 @@ Phone OTP is explicitly development-only and uses the fixed code in `development
 
 - Frontend build from the root: `npm run build`; Vite writes `dist/`.
 - Backend build from `backend/`: `npm run build`; this cleans `backend/dist/` and runs TypeScript compilation.
+- Render backend build from `backend/`: `npm run build:render`; this generates Prisma, creates/uses `ocr-worker/.venv`, installs the pinned Python requirements, verifies the PaddleOCR import and worker startup, then builds TypeScript.
 - Backend start from `backend/`: `npm run start`; this runs `dist/src/server.js`.
 - Backend Prisma generation from `backend/`: `npm run prisma:generate`.
 - Verification Prisma generation from `verification-database/`: `npm run prisma:generate`.
@@ -349,14 +350,23 @@ The backend `build` script does not generate Prisma clients. The verification cl
 
 No `render.yaml`, Dockerfile, or committed Render service manifest exists in this repository. Therefore service names, root directories, publish-directory settings, exact dashboard commands, and production URLs cannot be confirmed from source. Verify those values in the Render dashboard and deployment logs.
 
-A repository-valid preparation sequence is:
+A repository-valid Render backend configuration is:
+
+```text
+Root Directory: backend
+Build Command: npm install && npm run build:render
+Start Command: npm run start
+```
+
+`build:render` installs the Python requirements before the Node backend is compiled. It uses `backend/ocr-worker/.venv/bin/python` on Render/Linux, which is also the runtime path selected automatically by the backend when `PADDLEOCR_PYTHON_PATH` is not set. The build fails if `paddleocr` cannot be imported or if the worker self-check fails.
+
+The equivalent preparation sequence is:
 
 ```powershell
-# Backend dependencies, Prisma client, and build
+# Backend dependencies, Prisma client, Python OCR runtime, verification, and build
 cd backend
 npm install
-npm run prisma:generate
-npm run build
+npm run build:render
 
 # Separate verification dependencies and Prisma client
 cd ..\verification-database
@@ -364,7 +374,7 @@ npm install
 npm run prisma:generate
 ```
 
-If Render builds from the repository root, its command must perform the equivalent package-directory operations. If the backend and verification database are separate services, each service still needs the generated client required by the backend runtime. Do not assume `npm run build` generates either client.
+If Render builds from the repository root, its command must change into `backend/` before running the backend commands. If the backend and verification database are separate services, each service still needs the generated client required by the backend runtime. Do not assume `npm run build` generates either client.
 
 Production must provide `DATABASE_URL`, `VERIFICATION_DATABASE_URL`, JWT secrets, Cloudinary values, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, OCR runtime settings, `FRONTEND_URL`, `VITE_API_URL`, and `NODE_ENV` as applicable to the service. Do not include credentials in deployment files or this README.
 
