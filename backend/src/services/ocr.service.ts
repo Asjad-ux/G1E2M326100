@@ -1,6 +1,6 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, extname, join } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { env } from '../config/env.js';
 import { downloadFile } from './cloudinary.service.js';
@@ -29,13 +29,29 @@ export type OcrProviderResult = {
   pageCount: number;
 };
 
+type OcrWorkerDiagnostics = Record<string, string | number | null>;
+
+function diagnosticText(value: unknown, inputPath?: string, limit = 2000) {
+  let text = String(value ?? '').replace(/[\r\n]+/g, ' ');
+  if (inputPath) {
+    text = text.replaceAll(inputPath, '<input>');
+    text = text.replaceAll(dirname(inputPath), '<input-dir>');
+  }
+  return text
+    .replace(/(api[_-]?key|authorization|password|secret|token)\s*[:=]\s*[^\s,;]+/gi, '$1=<redacted>')
+    .slice(0, limit);
+}
+
 export function ocrLog(stage: string, details: Record<string, unknown> = {}) {
   const suffix = Object.entries(details).map(([key, value]) => `${key}=${String(value)}`).join(' ');
   console.info(`[OCR] ${stage}${suffix ? ` ${suffix}` : ''}`);
 }
 
-export function ocrError(stage: string, provider = 'PaddleOCR', status?: number) {
-  console.error(`[OCR ERROR] stage=${stage} provider=${provider} status=${status || 'unknown'}`);
+export function ocrError(stage: string, provider = 'PaddleOCR', status?: number, details: OcrWorkerDiagnostics = {}) {
+  const suffix = Object.entries(details)
+    .map(([key, value]) => `${key}=${diagnosticText(value)}`)
+    .join(' ');
+  console.error(`[OCR ERROR] stage=${stage} provider=${provider} status=${status || 'unknown'}${suffix ? ` ${suffix}` : ''}`);
 }
 
 export function ocrWarning(stage: string, documentType: string, details: Record<string, unknown> = {}) {
@@ -49,6 +65,7 @@ export class OcrWorkerError extends AppError {
     public readonly stage = 'worker',
     statusCode = 502,
     public readonly provider = 'PaddleOCR',
+    public readonly diagnostics: OcrWorkerDiagnostics = {},
   ) {
     super(statusCode, message);
   }
@@ -99,27 +116,53 @@ function runWorker(inputPath: string): Promise<OcrProviderResult> {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
+    let stderr = '';
     let timedOut = false;
     const timeout = setTimeout(() => {
       timedOut = true;
       child.kill();
     }, Math.max(1000, env.paddleTimeoutMs));
     child.stdout.on('data', chunk => { stdout += String(chunk); });
-    child.stderr.on('data', () => undefined);
-    child.once('error', () => {
+    child.stderr.on('data', chunk => { stderr += String(chunk); });
+    child.once('error', error => {
       clearTimeout(timeout);
-      reject(new OcrWorkerError('PaddleOCR worker is unavailable.', 'worker-unavailable', 503));
+      reject(new OcrWorkerError('PaddleOCR worker is unavailable.', 'worker-unavailable', 503, 'PaddleOCR', {
+        errorName: error.name,
+        errorMessage: diagnosticText(error.message, inputPath),
+      }));
     });
-    child.once('close', code => {
+    child.once('close', (code, signal) => {
       clearTimeout(timeout);
-      if (timedOut) return reject(new OcrWorkerError('PaddleOCR worker timed out.', 'timeout', 504));
+      if (timedOut) return reject(new OcrWorkerError('PaddleOCR worker timed out.', 'timeout', 504, 'PaddleOCR', {
+        exitCode: code,
+        signal: signal || null,
+        stderr: diagnosticText(stderr, inputPath),
+      }));
       let payload: Record<string, unknown>;
       try {
         payload = parseWorkerOutput(stdout);
       } catch (error) {
-        return reject(error);
+        return reject(new OcrWorkerError(
+          error instanceof OcrWorkerError ? error.message : 'PaddleOCR returned malformed JSON.',
+          'malformed-response',
+          502,
+          'PaddleOCR',
+          {
+            exitCode: code,
+            signal: signal || null,
+            stderr: diagnosticText(stderr, inputPath),
+          },
+        ));
       }
-      if (code !== 0 || payload.ok !== true) return reject(new OcrWorkerError('PaddleOCR worker failed.', 'worker-failure'));
+      if (code !== 0 || payload.ok !== true) return reject(new OcrWorkerError('PaddleOCR worker failed.', 'worker-failure', 502, 'PaddleOCR', {
+        errorType: typeof payload.errorType === 'string' ? diagnosticText(payload.errorType) : null,
+        errorMessage: typeof payload.errorMessage === 'string' ? diagnosticText(payload.errorMessage, inputPath) : null,
+        exitCode: code,
+        signal: signal || null,
+        stderr: typeof payload.stderr === 'string' && payload.stderr.trim()
+          ? diagnosticText(payload.stderr, inputPath)
+          : diagnosticText(stderr, inputPath),
+      }));
       const pageCount = payload.pageCount;
       if (typeof payload.text !== 'string' || !payload.text.trim() || !Array.isArray(payload.lines) || typeof pageCount !== 'number' || !Number.isInteger(pageCount) || pageCount < 1) {
         return reject(new OcrWorkerError('PaddleOCR returned an invalid result.', 'malformed-response'));

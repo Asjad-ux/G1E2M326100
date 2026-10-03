@@ -4,9 +4,17 @@ import argparse
 import contextlib
 import io
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
+
+
+class WorkerInferenceError(Exception):
+    def __init__(self, cause: Exception, stderr: str = ""):
+        super().__init__(str(cause))
+        self.cause = cause
+        self.stderr = stderr
 
 
 def as_json_value(value: Any) -> Any:
@@ -19,6 +27,16 @@ def as_json_value(value: Any) -> Any:
     if isinstance(value, dict):
         return {str(key): as_json_value(item) for key, item in value.items()}
     return value
+
+
+def diagnostic_text(value: Any, input_path: Path | None = None, limit: int = 2000) -> str:
+    """Keep worker diagnostics useful without emitting document data or secrets."""
+    text = str(value or "").replace("\r", " ").replace("\n", " ")
+    if input_path:
+        text = text.replace(str(input_path), "<input>")
+        text = text.replace(str(input_path.parent), "<input-dir>")
+    text = re.sub(r"(?i)(api[_-]?key|authorization|password|secret|token)\s*[:=]\s*[^\s,;]+", r"\1=<redacted>", text)
+    return text[:limit]
 
 
 def result_data(result: Any) -> dict[str, Any]:
@@ -71,24 +89,27 @@ def run_inference(input_path: Path, device: str) -> dict[str, Any]:
     # of the JSON protocol and out of the Node backend logs.
     quiet_stdout = io.StringIO()
     quiet_stderr = io.StringIO()
-    with contextlib.redirect_stdout(quiet_stdout), contextlib.redirect_stderr(quiet_stderr):
-        from paddleocr import PaddleOCR
+    try:
+        with contextlib.redirect_stdout(quiet_stdout), contextlib.redirect_stderr(quiet_stderr):
+            from paddleocr import PaddleOCR
 
-        ocr = PaddleOCR(
-            lang="en",
-            device=device,
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            use_textline_orientation=False,
-            enable_mkldnn=False,
-        )
-        results = ocr.predict(
-            input=str(input_path),
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            use_textline_orientation=False,
-        )
-        pages = list(results)
+            ocr = PaddleOCR(
+                lang="en",
+                device=device,
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False,
+                use_textline_orientation=False,
+                enable_mkldnn=False,
+            )
+            results = ocr.predict(
+                input=str(input_path),
+                use_doc_orientation_classify=False,
+                use_doc_unwarping=False,
+                use_textline_orientation=False,
+            )
+            pages = list(results)
+    except Exception as error:
+        raise WorkerInferenceError(error, quiet_stderr.getvalue()) from error
 
     if not pages:
         raise ValueError("PaddleOCR returned no pages")
@@ -135,8 +156,16 @@ def main() -> int:
         print(json.dumps({"ok": True, **run_inference(args.input, args.device)}, ensure_ascii=True))
         return 0
     except Exception as error:
-        # Only emit an error class to avoid leaking file contents or model logs.
-        print(json.dumps({"ok": False, "errorType": type(error).__name__}))
+        cause = error.cause if isinstance(error, WorkerInferenceError) else error
+        stderr = error.stderr if isinstance(error, WorkerInferenceError) else ""
+        # Keep the protocol diagnostic, but never emit document contents, secrets,
+        # or an unbounded Paddle traceback to the Node process.
+        print(json.dumps({
+            "ok": False,
+            "errorType": type(cause).__name__,
+            "errorMessage": diagnostic_text(cause, args.input),
+            "stderr": diagnostic_text(stderr, args.input),
+        }, ensure_ascii=True))
         return 1
 
 

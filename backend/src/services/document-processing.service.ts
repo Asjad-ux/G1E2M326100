@@ -99,9 +99,14 @@ export async function processUploadedDocument(documentId: string): Promise<Docum
     return { documentId: document.id, documentType: document.documentType, extractionStatus: extraction.status, extractedFieldCount: extractedFields.length, extractedFields, verificationStatus };
   } catch (error) {
     const provider = error && typeof error === 'object' && 'provider' in error ? String((error as { provider?: unknown }).provider || 'unknown') : 'unknown';
-    const status = error && typeof error === 'object' && 'providerStatus' in error ? Number((error as { providerStatus?: unknown }).providerStatus || 0) : undefined;
+    const status = error && typeof error === 'object'
+      ? Number(('providerStatus' in error ? (error as { providerStatus?: unknown }).providerStatus : (error as { statusCode?: unknown }).statusCode) || 0) || undefined
+      : undefined;
     const stage = error && typeof error === 'object' && 'stage' in error ? String((error as { stage?: unknown }).stage || 'processing') : 'processing';
-    ocrError(stage, provider, status);
+    const diagnostics = error && typeof error === 'object' && 'diagnostics' in error && (error as { diagnostics?: unknown }).diagnostics && typeof (error as { diagnostics?: unknown }).diagnostics === 'object'
+      ? (error as { diagnostics: Record<string, string | number | null> }).diagnostics
+      : {};
+    ocrError(stage, provider, status, diagnostics);
     await setDocumentStatuses(document.id, 'FAILED', 'FAILED').catch(() => undefined);
     return { documentId: document.id, documentType: document.documentType, extractionStatus: 'FAILED', extractedFieldCount: 0, extractedFields: [], verificationStatus: 'NOT_RUN' };
   }
