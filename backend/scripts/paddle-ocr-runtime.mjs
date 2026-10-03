@@ -9,7 +9,7 @@ const backendDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const workerDirectory = resolve(backendDirectory, 'ocr-worker');
 const requirementsPath = resolve(workerDirectory, 'requirements.txt');
 const workerPath = resolve(workerDirectory, 'paddle_worker.py');
-const virtualEnvironmentDirectory = resolve(backendDirectory, 'ocr-runtime');
+const virtualEnvironmentDirectory = resolve(backendDirectory, 'ocr-runtime', '.venv');
 const virtualEnvironmentPython = resolve(
   virtualEnvironmentDirectory,
   process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python',
@@ -19,10 +19,6 @@ function configuredBackendPath(value, fallback) {
   const configured = value?.trim();
   if (!configured) return fallback;
   return isAbsolute(configured) ? configured : resolve(backendDirectory, configured);
-}
-
-function configuredPythonPath() {
-  return configuredBackendPath(process.env.PADDLEOCR_PYTHON_PATH, virtualEnvironmentPython);
 }
 
 function configuredWorkerPath() {
@@ -47,15 +43,6 @@ function run(command, args, description) {
 }
 
 function bootstrapPython() {
-  const configured = process.env.PADDLEOCR_PYTHON_PATH?.trim();
-  if (configured) {
-    const configuredPath = configuredPythonPath();
-    if (!existsSync(configuredPath)) {
-      throw new Error(`PADDLEOCR_PYTHON_PATH does not exist: ${configuredPath}`);
-    }
-    return configuredPath;
-  }
-
   if (!existsSync(virtualEnvironmentPython)) {
     const command = process.platform === 'win32' ? 'py' : 'python3';
     const args = process.platform === 'win32'
@@ -81,7 +68,7 @@ function install() {
 }
 
 function verify() {
-  const python = configuredPythonPath();
+  const python = virtualEnvironmentPython;
   const worker = configuredWorkerPath();
   if (!existsSync(python)) {
     throw new Error(`PaddleOCR Python executable is missing: ${python}. Run the install step first.`);

@@ -3,4 +3,4 @@ dist/
 .env
 *.log
 ocr-worker/.venv/
-ocr-runtime/
+ocr-runtime/.venv/

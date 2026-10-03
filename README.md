@@ -165,7 +165,7 @@ Never commit `.env` files or print their values. The backend searches for `backe
 
 | Variable | Purpose |
 | --- | --- |
-| `PADDLEOCR_PYTHON_PATH` | Python executable for the PaddleOCR worker; relative paths resolve from `backend/`. |
+| `PADDLEOCR_PYTHON_PATH` | Not used; the backend always resolves `ocr-runtime/.venv/bin/python` on Render/Linux (or the Windows equivalent) from the backend directory. |
 | `PADDLEOCR_WORKER_PATH` | Worker script; defaults to `ocr-worker/paddle_worker.py` under `backend/`. |
 | `PADDLEOCR_DEVICE` | PaddleOCR device; defaults to `cpu`. |
 | `PADDLEOCR_TIMEOUT_MS` | OCR worker timeout; defaults to `300000`. |
@@ -251,8 +251,8 @@ Set this package's `DATABASE_URL` to `cpcl_verification` before running the comm
 The checked-in backend documentation verifies Python 3.11.9 with the pinned Paddle packages. From `backend/` on Windows:
 
 ```powershell
-py -3.11 -m venv ocr-runtime
-ocr-runtime/Scripts/python.exe -m pip install -r ocr-worker/requirements.txt
+py -3.11 -m venv ocr-runtime/.venv
+ocr-runtime/.venv/Scripts/python.exe -m pip install -r ocr-worker/requirements.txt
 ```
 
 The first OCR run may download PaddleOCR models.
@@ -339,7 +339,7 @@ Phone OTP is explicitly development-only and uses the fixed code in `development
 
 - Frontend build from the root: `npm run build`; Vite writes `dist/`.
 - Backend build from `backend/`: `npm run build`; this cleans `backend/dist/` and runs TypeScript compilation.
-- Render backend build from `backend/`: `npm run build:render`; this generates Prisma, creates/uses `ocr-runtime`, installs the pinned Python requirements, verifies the PaddleOCR import and worker startup, then builds TypeScript.
+- Render backend build from `backend/`: `npm run build:render`; this generates Prisma, creates/uses `ocr-runtime/.venv`, installs the pinned Python requirements, verifies the PaddleOCR import and worker startup, then builds TypeScript.
 - Backend start from `backend/`: `npm run start`; this runs `dist/src/server.js`.
 - Backend Prisma generation from `backend/`: `npm run prisma:generate`.
 - Verification Prisma generation from `verification-database/`: `npm run prisma:generate`.
@@ -358,7 +358,7 @@ Build Command: npm install && npm run build:render
 Start Command: npm run start
 ```
 
-`build:render` installs the Python requirements before the Node backend is compiled. It uses `backend/ocr-runtime/bin/python` on Render/Linux, which is also the runtime path selected automatically by the backend when `PADDLEOCR_PYTHON_PATH` is not set. The build fails if `paddleocr` cannot be imported or if the worker self-check fails.
+`build:render` installs the Python requirements before the Node backend is compiled. It uses `backend/ocr-runtime/.venv/bin/python` on Render/Linux, which is also the runtime path selected by the production backend. The runtime never falls back to system Python. The build fails if the exact executable is missing, `paddleocr` cannot be imported from it, or the worker self-check fails.
 
 The equivalent preparation sequence is:
 

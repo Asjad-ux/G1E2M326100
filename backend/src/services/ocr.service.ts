@@ -119,7 +119,10 @@ function runPythonDiagnostic(args: string[]): PythonDiagnostic {
   try {
     const output = execFileSync(env.paddlePythonPath, args, {
       encoding: 'utf8',
-      timeout: 5000,
+      // Python startup/import can exceed five seconds on a cold production
+      // instance. This diagnostic limit is independent of the OCR worker
+      // timeout, which remains controlled by PADDLEOCR_TIMEOUT_MS.
+      timeout: 30000,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });

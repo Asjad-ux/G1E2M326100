@@ -64,9 +64,8 @@ function configuredBackendPath(value: string | undefined, fallback: string) {
 const projectPaddlePythonPath = resolve(
   backendDirectory,
   'ocr-runtime',
-  process.platform === 'win32'
-    ? 'Scripts/python.exe'
-    : 'bin/python'
+  '.venv',
+  process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python'
 );
 
 const defaultPaddlePythonPath = projectPaddlePythonPath;
@@ -133,10 +132,9 @@ export const env = {
 
   cloudinaryTimeoutMs: Number(process.env.CLOUDINARY_TIMEOUT_MS || 30000),
 
-  paddlePythonPath: configuredBackendPath(
-    process.env.PADDLEOCR_PYTHON_PATH,
-    defaultPaddlePythonPath
-  ),
+  // The Render build and runtime must use one repository-relative executable.
+  // Do not fall back to PATH/system Python: it may not contain PaddleOCR.
+  paddlePythonPath: defaultPaddlePythonPath,
 
   paddleWorkerPath: configuredBackendPath(
     process.env.PADDLEOCR_WORKER_PATH,
