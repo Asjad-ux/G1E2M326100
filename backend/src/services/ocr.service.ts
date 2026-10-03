@@ -1,7 +1,8 @@
+import { existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join } from 'node:path';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { env } from '../config/env.js';
 import { downloadFile } from './cloudinary.service.js';
 import { AppError } from '../utils/errors.js';
@@ -29,7 +30,7 @@ export type OcrProviderResult = {
   pageCount: number;
 };
 
-type OcrWorkerDiagnostics = Record<string, string | number | null>;
+type OcrWorkerDiagnostics = Record<string, string | number | boolean | null>;
 
 function diagnosticText(value: unknown, inputPath?: string, limit = 2000) {
   let text = String(value ?? '').replace(/[\r\n]+/g, ' ');
@@ -109,8 +110,74 @@ function parseWorkerOutput(stdout: string) {
   }
 }
 
+type PythonDiagnostic = {
+  ok: boolean;
+  output: string;
+};
+
+function runPythonDiagnostic(args: string[]): PythonDiagnostic {
+  try {
+    const output = execFileSync(env.paddlePythonPath, args, {
+      encoding: 'utf8',
+      timeout: 5000,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return { ok: true, output: diagnosticText(output.trim() || '<no output>') };
+  } catch (error) {
+    const failure = error as { message?: unknown; stdout?: unknown; stderr?: unknown };
+    const output = failure.stderr || failure.stdout || failure.message || 'unknown Python error';
+    return { ok: false, output: diagnosticText(output) };
+  }
+}
+
+function verifyPaddleRuntime() {
+  const executable = env.paddlePythonPath;
+  const executableExists = existsSync(executable);
+  const pythonVersion = executableExists
+    ? runPythonDiagnostic(['--version'])
+    : { ok: false, output: 'executable not found' };
+  const paddleocrModule = executableExists
+    ? runPythonDiagnostic(['-c', 'import paddleocr; print(paddleocr.__file__)'])
+    : { ok: false, output: 'import not attempted because executable was not found' };
+
+  ocrLog('worker runtime', {
+    pythonExecutable: executable,
+    executableExists,
+    pythonVersion: pythonVersion.output,
+    paddleocrModule: paddleocrModule.output,
+  });
+
+  if (!executableExists) {
+    throw new OcrWorkerError(
+      `PaddleOCR runtime unavailable: Python executable does not exist at ${executable}`,
+      'worker-unavailable',
+      503,
+      'PaddleOCR',
+      { pythonExecutable: executable, executableExists: false, pythonVersion: null, paddleocrModule: null },
+    );
+  }
+
+  if (!paddleocrModule.ok) {
+    throw new OcrWorkerError(
+      `PaddleOCR runtime unavailable: ${paddleocrModule.output}`,
+      'worker-unavailable',
+      503,
+      'PaddleOCR',
+      { pythonExecutable: executable, executableExists: true, pythonVersion: pythonVersion.output, paddleocrModule: paddleocrModule.output },
+    );
+  }
+}
+
 function runWorker(inputPath: string): Promise<OcrProviderResult> {
   return new Promise((resolve, reject) => {
+    try {
+      verifyPaddleRuntime();
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
     const child = spawn(env.paddlePythonPath, [env.paddleWorkerPath, '--input', inputPath, '--device', env.paddleDevice], {
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -154,7 +221,13 @@ function runWorker(inputPath: string): Promise<OcrProviderResult> {
           },
         ));
       }
-      if (code !== 0 || payload.ok !== true) return reject(new OcrWorkerError('PaddleOCR worker failed.', 'worker-failure', 502, 'PaddleOCR', {
+      if (code !== 0 || payload.ok !== true) return reject(new OcrWorkerError(
+        payload.errorType === 'ModuleNotFoundError' && typeof payload.errorMessage === 'string'
+          ? `PaddleOCR runtime unavailable: ${payload.errorMessage}`
+          : 'PaddleOCR worker failed.',
+        payload.errorType === 'ModuleNotFoundError' ? 'worker-unavailable' : 'worker-failure',
+        payload.errorType === 'ModuleNotFoundError' ? 503 : 502,
+        'PaddleOCR', {
         errorType: typeof payload.errorType === 'string' ? diagnosticText(payload.errorType) : null,
         errorMessage: typeof payload.errorMessage === 'string' ? diagnosticText(payload.errorMessage, inputPath) : null,
         exitCode: code,

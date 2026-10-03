@@ -9,7 +9,7 @@ const backendDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const workerDirectory = resolve(backendDirectory, 'ocr-worker');
 const requirementsPath = resolve(workerDirectory, 'requirements.txt');
 const workerPath = resolve(workerDirectory, 'paddle_worker.py');
-const virtualEnvironmentDirectory = resolve(workerDirectory, '.venv');
+const virtualEnvironmentDirectory = resolve(backendDirectory, 'ocr-runtime');
 const virtualEnvironmentPython = resolve(
   virtualEnvironmentDirectory,
   process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python',

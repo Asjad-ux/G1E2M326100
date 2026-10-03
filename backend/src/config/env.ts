@@ -5,13 +5,19 @@ import { fileURLToPath } from 'node:url';
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 
-const sourceBackendDirectory = resolve(moduleDir, '../..');
-
-const backendDirectory = existsSync(resolve(sourceBackendDirectory, 'package.json'))
-  ? sourceBackendDirectory
-  : resolve(moduleDir, '../../..');
-
 const workingDirectory = resolve(process.cwd());
+
+const sourceBackendDirectory = resolve(moduleDir, '../..');
+const compiledBackendDirectory = resolve(moduleDir, '../../..');
+const backendDirectory = existsSync(resolve(workingDirectory, 'src/server.ts'))
+  ? workingDirectory
+  : existsSync(resolve(workingDirectory, 'dist/src/server.js'))
+    ? workingDirectory
+    : existsSync(resolve(workingDirectory, 'backend/package.json'))
+      ? resolve(workingDirectory, 'backend')
+      : existsSync(resolve(sourceBackendDirectory, 'package.json'))
+        ? sourceBackendDirectory
+        : compiledBackendDirectory;
 
 const envCandidates = [
   resolve(workingDirectory, 'backend', '.env'),
@@ -57,17 +63,13 @@ function configuredBackendPath(value: string | undefined, fallback: string) {
 
 const projectPaddlePythonPath = resolve(
   backendDirectory,
-  'ocr-worker',
+  'ocr-runtime',
   process.platform === 'win32'
-    ? '.venv/Scripts/python.exe'
-    : '.venv/bin/python'
+    ? 'Scripts/python.exe'
+    : 'bin/python'
 );
 
-const defaultPaddlePythonPath = existsSync(projectPaddlePythonPath)
-  ? projectPaddlePythonPath
-  : process.platform === 'win32'
-    ? 'python'
-    : 'python3';
+const defaultPaddlePythonPath = projectPaddlePythonPath;
 
 const defaultPaddleWorkerPath = resolve(
   backendDirectory,
